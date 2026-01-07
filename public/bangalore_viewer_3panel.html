@@ -117,8 +117,8 @@
 
         .panel-header {
             position: absolute;
-            top: 60px;
-            left: 20px;
+            top: 45px;
+            right: 10px;
             background: rgba(0, 0, 0, 0.7);
             color: white;
             padding: 8px 12px;
@@ -314,13 +314,19 @@
                 maps[panel].on('click', function(e) {
                     console.log(`[CLICK] Panel: ${panel}, labelingMode: ${labelingMode}, lat: ${e.latlng.lat}, lng: ${e.latlng.lng}`);
 
+                    // Disable labeling on OSM panel
+                    if (panel === 'osm') {
+                        console.log('[CLICK] Labeling disabled on OSM panel');
+                        return;
+                    }
+
                     // If on embedding panel and in labeling mode, extract embedding and label it
                     if (panel === 'embedding' && labelingMode) {
                         console.log('[CLICK] Routing to embeddings labeling handler');
                         extractAndLabelEmbedding(e.latlng.lat, e.latlng.lng);
-                    } else {
-                        // Old behavior: add marker (for other panels)
-                        console.log(`[CLICK] Routing to old marker handler for ${panel}`);
+                    } else if (panel === 'rgb') {
+                        // Old behavior: add marker only for RGB panel
+                        console.log(`[CLICK] Routing to marker handler for RGB panel`);
                         const label = document.getElementById('label-input')?.value || 'unlabeled';
                         addMarker(panel, e.latlng.lat, e.latlng.lng, label);
                     }
