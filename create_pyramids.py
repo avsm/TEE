@@ -20,6 +20,7 @@ pyramids/
   └── satellite/
 """
 
+import sys
 import numpy as np
 import rasterio
 from rasterio.enums import Resampling
@@ -236,20 +237,42 @@ def create_pyramids_for_image(source_file, output_dir, name, upscale_factor=1):
 
 def main():
     """Main function to create all pyramids."""
+    # Import here to avoid issues if viewport file doesn't exist
+    sys.path.insert(0, str(Path(__file__).parent))
+    try:
+        from lib.viewport_utils import get_active_viewport
+        viewport = get_active_viewport()
+        viewport_id = viewport['viewport_id']
+    except Exception as e:
+        print(f"Warning: Could not read active viewport: {e}")
+        print("Processing any available mosaic files...")
+        viewport_id = None
+
     print("=" * 70)
     print("Creating Image Pyramids for Tessera Embeddings and Satellite RGB")
     print("=" * 70)
+    if viewport_id:
+        print(f"Viewport: {viewport_id}")
 
     PYRAMIDS_DIR.mkdir(exist_ok=True)
 
     # Process Tessera embeddings (2017-2024)
     for year in YEARS:
-        tessera_file = MOSAICS_DIR / f"bangalore_{year}.tif"
+        # First try viewport-specific filename
+        if viewport_id:
+            tessera_file = MOSAICS_DIR / f"{viewport_id}_embeddings_{year}.tif"
+        else:
+            tessera_file = None
+
+        # Fallback to old Bangalore filename for compatibility
+        if not tessera_file or not tessera_file.exists():
+            tessera_file = MOSAICS_DIR / f"bangalore_{year}.tif"
 
         if not tessera_file.exists():
             print(f"\n⚠️  Skipping {year}: File not found")
             continue
 
+        print(f"\nProcessing {tessera_file.name}...")
         # First, create RGB from first 3 bands (upscale 3x for maximum resolution when zoomed in)
         rgb_temp_file = PYRAMIDS_DIR / f"temp_rgb_{year}.tif"
         rgb_file = create_rgb_from_tessera(tessera_file, rgb_temp_file, upscale_factor=3)
@@ -262,7 +285,15 @@ def main():
         rgb_temp_file.unlink()
 
     # Process satellite RGB (upscale 3x to match Tessera resolution for consistency)
-    satellite_file = MOSAICS_DIR / "bangalore_satellite_rgb.tif"
+    if viewport_id:
+        satellite_file = MOSAICS_DIR / f"{viewport_id}_satellite_rgb.tif"
+    else:
+        satellite_file = None
+
+    # Fallback to old Bangalore filename for compatibility
+    if not satellite_file or not satellite_file.exists():
+        satellite_file = MOSAICS_DIR / "bangalore_satellite_rgb.tif"
+
     if satellite_file.exists():
         satellite_upscaled_file = PYRAMIDS_DIR / "temp_satellite_upscaled.tif"
         upscale_image(satellite_file, satellite_upscaled_file, upscale_factor=3)

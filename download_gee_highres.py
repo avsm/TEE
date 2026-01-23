@@ -26,7 +26,6 @@ from lib.viewport_utils import get_active_viewport, check_cache
 YEAR = 2024
 MAX_RESOLUTION_M = 5  # Target maximum 5m resolution
 DATA_DIR = Path.home() / "blore_data"
-OUTPUT_FILE = DATA_DIR / "mosaics" / "bangalore_highres_rgb.tif"
 
 def init_ee():
     """Initialize Earth Engine."""
@@ -119,7 +118,7 @@ def search_high_res_imagery(BBOX):
 
     return best_source
 
-def download_imagery(source_info):
+def download_imagery(source_info, output_file):
     """Download imagery from the selected source in tiles."""
     import rasterio
     from rasterio.merge import merge as rasterio_merge
@@ -159,7 +158,7 @@ def download_imagery(source_info):
             })
 
     print(f"\nDownloading in {len(tiles)} tiles to avoid size limits...")
-    OUTPUT_FILE.parent.mkdir(exist_ok=True)
+    output_file.parent.mkdir(exist_ok=True)
 
     try:
         with TemporaryDirectory() as tmpdir:
@@ -218,19 +217,19 @@ def download_imagery(source_info):
             })
 
             # Write merged file
-            with rasterio.open(OUTPUT_FILE, "w", **out_meta) as dest:
+            with rasterio.open(output_file, "w", **out_meta) as dest:
                 dest.write(mosaic)
 
             # Close source files
             for src in src_files_to_mosaic:
                 src.close()
 
-            if OUTPUT_FILE.exists():
-                size_mb = OUTPUT_FILE.stat().st_size / (1024 * 1024)
-                print(f"✓ Downloaded: {OUTPUT_FILE} ({size_mb:.2f} MB)")
+            if output_file.exists():
+                size_mb = output_file.stat().st_size / (1024 * 1024)
+                print(f"✓ Downloaded: {output_file} ({size_mb:.2f} MB)")
 
                 # Display info
-                with rasterio.open(OUTPUT_FILE) as src:
+                with rasterio.open(output_file) as src:
                     print(f"\nImage info:")
                     print(f"  Size: {src.width} × {src.height} pixels")
                     print(f"  Bands: {src.count} (RGB)")
@@ -264,6 +263,9 @@ def main():
         print(f"ERROR: Failed to read viewport: {e}", file=sys.stderr)
         return
 
+    # Use viewport-specific filename for proper caching across viewports
+    output_file = DATA_DIR / "mosaics" / f"{viewport_id}_highres_rgb.tif"
+
     # Check cache for matching bounds
     cached_file = check_cache(BBOX, 'satellite')
     if cached_file:
@@ -282,7 +284,7 @@ def main():
         return
 
     # Download
-    success = download_imagery(source_info)
+    success = download_imagery(source_info, output_file)
 
     if success:
         print("\n" + "=" * 70)

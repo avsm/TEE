@@ -1,0 +1,20 @@
+Viewport Configuration
+=====================
+
+Viewport ID: Bhopal
+
+Center (degrees):
+  Latitude:  23.2249°
+  Longitude: 77.3949°
+
+Bounds (degrees):
+  Min Latitude:  23.1800°
+  Max Latitude:  23.2699°
+  Min Longitude: 77.3460°
+  Max Longitude: 77.4438°
+
+Size: 10.0km × 10.0km
+
+Description: 10km × 10km
+
+Generated: 2026-01-16T08:35:39.746439

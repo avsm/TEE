@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Create a standalone HTML viewer for Bangalore embeddings
+Create a standalone HTML viewer for embeddings
 No Jupyter required - just open the HTML file in a browser
 """
 
+import sys
 import json
 from pathlib import Path
 import base64
@@ -11,12 +12,14 @@ from PIL import Image
 import rasterio
 from rasterio.warp import transform_bounds
 
+# Add parent directory to path for lib imports
+sys.path.insert(0, str(Path(__file__).parent))
+
+from lib.viewport_utils import get_active_viewport
+
 DATA_DIR = Path.home() / "blore_data"
 PYRAMIDS_DIR = DATA_DIR / "pyramids"
 YEARS = list(range(2017, 2025))
-OUTPUT_HTML = Path("bangalore_viewer.html")
-INITIAL_ZOOM = 12  # Leaflet zoom level
-CENTER = [12.97, 77.59]  # Bangalore center
 
 def get_image_bounds(image_path):
     """Get bounds of a GeoTIFF in lat/lon."""
@@ -27,22 +30,55 @@ def get_image_bounds(image_path):
         # Return as [[south, west], [north, east]] for Leaflet
         return [[bounds[1], bounds[0]], [bounds[3], bounds[2]]]
 
-def create_html_viewer():
+def create_html_viewer(viewport_id=None, viewport_bounds=None):
     """Generate HTML file with 9 Leaflet maps."""
+
+    # Use viewport-specific HTML filename
+    if viewport_id:
+        output_html = Path(f"{viewport_id}_viewer.html")
+    else:
+        output_html = Path("bangalore_viewer.html")
+
+    # Calculate center and zoom from viewport bounds
+    if viewport_bounds:
+        # bounds format: (min_lat, min_lon, max_lat, max_lon)
+        center = [
+            (viewport_bounds[0] + viewport_bounds[2]) / 2,
+            (viewport_bounds[1] + viewport_bounds[3]) / 2
+        ]
+        # Calculate appropriate zoom level based on bounds extent
+        lat_extent = viewport_bounds[2] - viewport_bounds[0]
+        lon_extent = viewport_bounds[3] - viewport_bounds[1]
+        extent = max(lat_extent, lon_extent)
+        if extent < 0.05:
+            initial_zoom = 15
+        elif extent < 0.1:
+            initial_zoom = 14
+        elif extent < 0.2:
+            initial_zoom = 13
+        else:
+            initial_zoom = 12
+        bounds = [[viewport_bounds[0], viewport_bounds[1]], [viewport_bounds[2], viewport_bounds[3]]]
+    else:
+        # Default Bangalore bounds for backwards compatibility
+        center = [12.97, 77.59]
+        initial_zoom = 12
+        bounds = [[12.83, 77.46], [13.14, 77.78]]
+        viewport_id = "bangalore"
 
     # Get bounds from one of the images
     sample_img = PYRAMIDS_DIR / "2024" / "level_4.tif"
     if sample_img.exists():
         bounds = get_image_bounds(sample_img)
     else:
-        # Default Bangalore bounds
-        bounds = [[12.83, 77.46], [13.14, 77.78]]
+        # Use calculated or default bounds
+        pass
 
     html = f'''<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Bangalore Tessera Embeddings Viewer</title>
+    <title>{viewport_id.title()} Tessera Embeddings Viewer</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -139,7 +175,7 @@ def create_html_viewer():
     </style>
 </head>
 <body>
-    <h1>Bangalore Tessera Embeddings Interactive Viewer</h1>
+    <h1>{viewport_id.title()} Tessera Embeddings Interactive Viewer</h1>
 
     <div id="controls">
         <label>Label: <input type="text" id="label-input" value="building" placeholder="Enter label name"></label>
@@ -311,12 +347,12 @@ def create_html_viewer():
         }}
 
         function saveLabels() {{
-            localStorage.setItem('bangalore_labels', JSON.stringify(labels));
+            localStorage.setItem('{viewport_id}_labels', JSON.stringify(labels));
             alert(`Saved ${{Object.values(labels).reduce((sum, arr) => sum + arr.length, 0)}} labels to browser storage`);
         }}
 
         function loadLabels() {{
-            const stored = localStorage.getItem('bangalore_labels');
+            const stored = localStorage.getItem('{viewport_id}_labels');
             if (stored) {{
                 const loadedLabels = JSON.parse(stored);
                 Object.keys(loadedLabels).forEach(mapId => {{
@@ -363,13 +399,24 @@ def create_html_viewer():
 </body>
 </html>'''
 
-    with open(OUTPUT_HTML, 'w') as f:
+    with open(output_html, 'w') as f:
         f.write(html)
 
-    print(f"✓ Created web viewer: {OUTPUT_HTML.absolute()}")
+    print(f"✓ Created web viewer: {output_html.absolute()}")
     print(f"\nTo use:")
-    print(f"  open {OUTPUT_HTML.absolute()}")
+    print(f"  open {output_html.absolute()}")
     print(f"\nor double-click the HTML file in Finder")
 
 if __name__ == "__main__":
-    create_html_viewer()
+    # Try to get active viewport, fall back to Bangalore for backwards compatibility
+    viewport_id = None
+    viewport_bounds = None
+    try:
+        viewport = get_active_viewport()
+        viewport_id = viewport['viewport_id']
+        viewport_bounds = viewport['bounds_tuple']
+    except Exception as e:
+        print(f"Warning: Could not read active viewport: {e}")
+        print("Using default Bangalore bounds...")
+
+    create_html_viewer(viewport_id, viewport_bounds)

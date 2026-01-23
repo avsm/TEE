@@ -46,7 +46,7 @@ def check_faiss_installed():
 
 
 def normalize_embeddings(embeddings):
-    """Normalize uint8 embeddings [0-255] to float32 [0-1] for FAISS."""
+    """Legacy function - NOT USED. Embeddings are already float32 in native range [-13.64, 17.22]."""
     return embeddings.astype(np.float32) / 255.0
 
 
@@ -68,8 +68,8 @@ def create_faiss_index():
         logger.error(f"Failed to read viewport: {e}")
         sys.exit(1)
 
-    # Find mosaic file
-    mosaic_file = MOSAICS_DIR / "bangalore_2024.tif"
+    # Find mosaic file (viewport-specific)
+    mosaic_file = MOSAICS_DIR / f"{viewport_id}_embeddings_2024.tif"
     if not mosaic_file.exists():
         logger.warning(f"Mosaic file not found: {mosaic_file}")
         return
@@ -114,11 +114,12 @@ def create_faiss_index():
                     sampled_embeddings.append(embedding)
                     sampled_coords.append((x, y))
 
-            sampled_embeddings = np.array(sampled_embeddings, dtype=np.uint8)
+            # Keep as float32 (no conversion to uint8 - embeddings are already float32 in GeoTIFF)
+            sampled_embeddings = np.array(sampled_embeddings, dtype=np.float32)
             logger.info(f"   ✓ Sampled {len(sampled_embeddings):,} pixels")
 
-            # Normalize to float32 [0-1]
-            sampled_embeddings_f32 = normalize_embeddings(sampled_embeddings)
+            # Use float32 embeddings directly (no normalization needed - keep native range)
+            sampled_embeddings_f32 = sampled_embeddings
 
             # Create IVF-PQ index
             logger.info(f"   Creating IVF-PQ index...")
@@ -164,7 +165,8 @@ def create_faiss_index():
                     for x in range(width):
                         pixel_coords.append((x, y))
 
-            all_embeddings = np.vstack(all_embeddings).astype(np.uint8)
+            # Keep as float32 (no conversion to uint8 - embeddings are already float32 in GeoTIFF)
+            all_embeddings = np.vstack(all_embeddings).astype(np.float32)
             logger.info(f"   ✓ Loaded all embeddings: {all_embeddings.shape}")
 
             # Save all embeddings

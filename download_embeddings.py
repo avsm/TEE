@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Download Tessera embeddings for Bangalore region
+Download Tessera embeddings for current viewport
 
-Reads viewport bounds from viewports/viewport.txt instead of hardcoding.
+Reads viewport bounds from active viewport configuration.
 Uses cache checking to avoid re-downloading for previously-selected viewports.
 """
 
@@ -53,7 +53,8 @@ def download_embeddings():
 
     for year in YEARS:
         print(f"\n📅 Processing year {year}...")
-        output_file = MOSAICS_DIR / f"bangalore_{year}.tif"
+        # Use viewport-specific filename for proper caching across viewports
+        output_file = MOSAICS_DIR / f"{viewport_id}_embeddings_{year}.tif"
 
         # Check cache for matching bounds
         cached_file = check_cache(BBOX, 'embeddings')

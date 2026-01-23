@@ -4,11 +4,17 @@ Create PCA-projected embeddings from Tessera embeddings.
 Reduces 128 dimensions to 3 for RGB visualization.
 """
 
+import sys
 import numpy as np
 import rasterio
 from sklearn.decomposition import IncrementalPCA
 from pathlib import Path
 # from tqdm import tqdm  # Disabled to reduce output
+
+# Add parent directory to path for lib imports
+sys.path.insert(0, str(Path(__file__).parent))
+
+from lib.viewport_utils import get_active_viewport
 
 # Configuration
 DATA_DIR = Path.home() / "blore_data"
@@ -18,11 +24,23 @@ YEARS = range(2024, 2025)  # 2024 only
 N_COMPONENTS = 3  # RGB
 CHUNK_SIZE = 1000  # Process in chunks to save memory
 
-def compute_pca_for_year(year):
+def compute_pca_for_year(year, viewport_id=None):
     """Compute PCA projection for a single year's embeddings."""
 
-    input_file = MOSAICS_DIR / f"bangalore_{year}.tif"
-    output_file = OUTPUT_DIR / f"bangalore_{year}_pca.tif"
+    # Try viewport-specific filename first
+    if viewport_id:
+        input_file = MOSAICS_DIR / f"{viewport_id}_embeddings_{year}.tif"
+    else:
+        input_file = None
+
+    # Fallback to old Bangalore filename for compatibility
+    if not input_file or not input_file.exists():
+        input_file = MOSAICS_DIR / f"bangalore_{year}.tif"
+
+    if viewport_id:
+        output_file = OUTPUT_DIR / f"{viewport_id}_{year}_pca.tif"
+    else:
+        output_file = OUTPUT_DIR / f"bangalore_{year}_pca.tif"
 
     if output_file.exists():
         print(f"✓ Skipping {year}: PCA file already exists")
@@ -124,10 +142,20 @@ def main():
     print("Creating PCA-projected embeddings for visualization")
     print("=" * 70)
 
+    # Try to get active viewport, but continue if not available for backwards compatibility
+    viewport_id = None
+    try:
+        viewport = get_active_viewport()
+        viewport_id = viewport['viewport_id']
+        print(f"Viewport: {viewport_id}")
+    except Exception as e:
+        print(f"Warning: Could not read active viewport: {e}")
+        print("Processing any available mosaic files...")
+
     success_count = 0
 
     for year in YEARS:
-        if compute_pca_for_year(year):
+        if compute_pca_for_year(year, viewport_id):
             success_count += 1
 
     print("\n" + "=" * 70)

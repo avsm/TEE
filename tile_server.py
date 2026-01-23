@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Tile server for Bangalore Tessera embeddings
-Serves map tiles dynamically from pyramid GeoTIFFs
+Tile server for Tessera embeddings
+Serves map tiles dynamically from pyramid GeoTIFFs for current viewport
 """
 
 from flask import Flask, send_file, jsonify
@@ -160,7 +160,7 @@ def health():
     })
 
 if __name__ == '__main__':
-    print("Starting Bangalore Tessera Tile Server...")
+    print("Starting Tessera Tile Server...")
     print(f"Serving tiles from: {PYRAMIDS_DIR.absolute()}")
     print("Available endpoints:")
     print("  - http://localhost:5125/tiles/<map_id>/<z>/<x>/<y>.png")

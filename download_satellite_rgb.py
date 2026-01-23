@@ -26,7 +26,6 @@ from lib.viewport_utils import get_active_viewport, check_cache
 YEAR = 2024
 RESOLUTION = 10  # meters per pixel
 DATA_DIR = Path.home() / "blore_data"
-OUTPUT_FILE = DATA_DIR / "mosaics" / "bangalore_satellite_rgb.tif"
 
 def download_satellite_rgb():
     """Download RGB satellite imagery for current viewport using Planetary Computer."""
@@ -39,6 +38,9 @@ def download_satellite_rgb():
     except Exception as e:
         print(f"ERROR: Failed to read viewport: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Use viewport-specific filename for proper caching across viewports
+    OUTPUT_FILE = DATA_DIR / "mosaics" / f"{viewport_id}_satellite_rgb.tif"
 
     # Check cache for matching bounds
     cached_file = check_cache(BBOX, 'satellite')

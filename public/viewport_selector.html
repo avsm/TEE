@@ -550,8 +550,8 @@
         let map;
         let viewportBox;
         let currentViewport = null;
-        let mapCenter = [13.0, 77.5]; // Bangalore
-        let mapZoom = 12;
+        let mapCenter = [20.0, 78.0]; // Default center of India (will be updated when viewport loads)
+        let mapZoom = 5; // Default zoom (will be updated when viewport loads)
 
         // Viewport selection state
         let previewBox = null;
@@ -829,6 +829,7 @@
 
         // Go directly to viewer
         function goToViewer() {
+            // Use the main viewport-aware viewer (bangalore_viewer_3panel.html is now viewport-agnostic)
             window.location.href = 'bangalore_viewer_3panel.html';
         }
 
@@ -904,9 +905,22 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
                 fillOpacity: 0.1
             }).addTo(map);
 
+            // Calculate zoom level based on viewport extent
+            const latExtent = bounds.maxLat - bounds.minLat;
+            const lonExtent = bounds.maxLon - bounds.minLon;
+            const maxExtent = Math.max(latExtent, lonExtent);
+
+            let zoom = 12;
+            if (maxExtent < 0.05) zoom = 15;
+            else if (maxExtent < 0.1) zoom = 14;
+            else if (maxExtent < 0.2) zoom = 13;
+            else if (maxExtent < 0.5) zoom = 12;
+            else if (maxExtent < 1.0) zoom = 11;
+            else zoom = 10;
+
             // Center map on viewport
             const center = currentViewport.center;
-            map.setView([center[0], center[1]], 12);
+            map.setView([center[0], center[1]], zoom);
         }
 
         // Load viewports list
@@ -966,9 +980,20 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
                     updateCurrentViewportDisplay();
                     drawViewportBox();
                     loadViewports(); // Refresh list to show active indicator
+
+                    // Show message about FAISS index status
+                    if (!data.faiss_ready) {
+                        console.log(`[VIEWPORT] FAISS index is being created in background for "${name}". This may take 2-5 minutes. Embeddings will be available once creation completes.`);
+                        alert(`✓ Switched to viewport: ${name}\n\n⏳ Creating embeddings index (2-5 minutes)...\n\nYou can continue working. Embeddings will be available once creation completes.`);
+                    } else {
+                        console.log(`[VIEWPORT] FAISS index ready for "${name}"`);
+                    }
+                } else {
+                    alert(`Error: ${data.error}`);
                 }
             } catch (error) {
                 console.error('Error switching viewport:', error);
+                alert('Error switching viewport. Check console for details.');
             }
         }
 
@@ -1154,7 +1179,7 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
                     loadViewports();
                     loadCurrentViewport();
 
-                    // Redirect to viewer after a short delay
+                    // Redirect to viewer after a short delay (using viewport-aware viewer)
                     setTimeout(() => {
                         window.location.href = 'bangalore_viewer_3panel.html';
                     }, 2000);

@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 import json
 import numpy as np
+import subprocess
 
 # Add parent directory to path for lib imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -46,6 +47,85 @@ FAISS_INDICES_DIR = DATA_DIR / "faiss_indices"
 # Task tracking for downloads
 tasks = {}
 tasks_lock = threading.Lock()
+
+# ============================================================================
+# HELPER FUNCTIONS FOR DATA PREPARATION
+# ============================================================================
+
+def check_viewport_mosaics_exist(viewport_name):
+    """Check if embeddings and satellite RGB mosaics exist for a viewport."""
+    embeddings_file = MOSAICS_DIR / f"{viewport_name}_embeddings_2024.tif"
+    satellite_file = MOSAICS_DIR / f"{viewport_name}_satellite_rgb.tif"
+
+    embeddings_exists = embeddings_file.exists()
+    satellite_exists = satellite_file.exists()
+
+    return embeddings_exists and satellite_exists
+
+def check_viewport_pyramids_exist(viewport_name):
+    """Check if pyramid tiles exist for a viewport."""
+    # Just check if the 2024 pyramid level_0 exists
+    pyramid_file = PYRAMIDS_DIR / "2024" / "level_0.tif"
+    satellite_pyramid = PYRAMIDS_DIR / "satellite" / "level_0.tif"
+
+    return pyramid_file.exists() and satellite_pyramid.exists()
+
+def trigger_data_download_and_processing(viewport_name):
+    """Download embeddings and satellite RGB, then create pyramids."""
+    def download_and_process():
+        try:
+            project_root = Path(__file__).parent.parent
+            logger.info(f"[DATA] Starting download for viewport '{viewport_name}'...")
+
+            # Download embeddings
+            logger.info(f"[DATA] Downloading embeddings for '{viewport_name}'...")
+            result = subprocess.run(
+                [sys.executable, 'download_embeddings.py'],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=1800  # 30 minute timeout
+            )
+            if result.returncode != 0:
+                logger.error(f"[DATA] ✗ Embeddings download failed for '{viewport_name}':\n{result.stderr}")
+                return
+            logger.info(f"[DATA] ✓ Embeddings downloaded for '{viewport_name}'")
+
+            # Download satellite RGB
+            logger.info(f"[DATA] Downloading satellite RGB for '{viewport_name}'...")
+            result = subprocess.run(
+                [sys.executable, 'download_satellite_rgb.py'],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=1800  # 30 minute timeout
+            )
+            if result.returncode != 0:
+                logger.error(f"[DATA] ✗ Satellite RGB download failed for '{viewport_name}':\n{result.stderr}")
+                return
+            logger.info(f"[DATA] ✓ Satellite RGB downloaded for '{viewport_name}'")
+
+            # Create pyramids
+            logger.info(f"[DATA] Creating pyramids for '{viewport_name}'...")
+            result = subprocess.run(
+                [sys.executable, 'create_pyramids.py'],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=1800  # 30 minute timeout
+            )
+            if result.returncode != 0:
+                logger.error(f"[DATA] ✗ Pyramid creation failed for '{viewport_name}':\n{result.stderr}")
+                return
+            logger.info(f"[DATA] ✓ Pyramids created for '{viewport_name}'")
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"[DATA] ✗ Download/processing timeout for '{viewport_name}'")
+        except Exception as e:
+            logger.error(f"[DATA] ✗ Error downloading/processing data for '{viewport_name}': {e}")
+
+    thread = threading.Thread(target=download_and_process, daemon=True)
+    thread.start()
 
 # ============================================================================
 # API ENDPOINTS
@@ -97,7 +177,7 @@ def api_current_viewport():
 
 @app.route('/api/viewports/switch', methods=['POST'])
 def api_switch_viewport():
-    """Switch to a different viewport."""
+    """Switch to a different viewport and ensure data and FAISS index exist."""
     try:
         data = request.get_json()
         viewport_name = data.get('name')
@@ -111,11 +191,89 @@ def api_switch_viewport():
         viewport = read_viewport_file(viewport_name)
         viewport['name'] = viewport_name
 
-        return jsonify({
+        response_data = {
             'success': True,
             'message': f'Switched to viewport: {viewport_name}',
-            'viewport': viewport
-        })
+            'viewport': viewport,
+            'data_ready': True,
+            'faiss_ready': False
+        }
+
+        # Step 1: Check if mosaics exist, trigger download if not
+        if not check_viewport_mosaics_exist(viewport_name):
+            logger.info(f"[DATA] Mosaics not found for viewport '{viewport_name}', triggering download...")
+            trigger_data_download_and_processing(viewport_name)
+            response_data['data_ready'] = False
+            response_data['message'] += f'\nDownloading data and creating pyramids (this may take 15-30 minutes)...'
+
+        # Step 2: Check if pyramids exist
+        if not check_viewport_pyramids_exist(viewport_name):
+            if response_data['data_ready']:
+                logger.info(f"[PYRAMIDS] Pyramids not found for viewport '{viewport_name}', triggering creation...")
+                # If data is ready but pyramids aren't, trigger pyramid creation
+                def create_pyramids_in_background():
+                    try:
+                        project_root = Path(__file__).parent.parent
+                        logger.info(f"[PYRAMIDS] Starting pyramid creation for '{viewport_name}'...")
+                        result = subprocess.run(
+                            [sys.executable, 'create_pyramids.py'],
+                            cwd=project_root,
+                            capture_output=True,
+                            text=True,
+                            timeout=1800  # 30 minute timeout
+                        )
+                        if result.returncode == 0:
+                            logger.info(f"[PYRAMIDS] ✓ Pyramid creation complete for '{viewport_name}'")
+                        else:
+                            logger.error(f"[PYRAMIDS] ✗ Pyramid creation failed for '{viewport_name}':\n{result.stderr}")
+                    except subprocess.TimeoutExpired:
+                        logger.error(f"[PYRAMIDS] ✗ Pyramid creation timeout for '{viewport_name}'")
+                    except Exception as e:
+                        logger.error(f"[PYRAMIDS] ✗ Error creating pyramids for '{viewport_name}': {e}")
+
+                thread = threading.Thread(target=create_pyramids_in_background, daemon=True)
+                thread.start()
+                response_data['message'] += '\nCreating pyramids (this may take 10-15 minutes)...'
+
+        # Step 3: Check if FAISS index exists
+        faiss_dir = FAISS_INDICES_DIR / viewport_name
+        faiss_index_file = faiss_dir / 'all_embeddings.npy'
+
+        if not faiss_index_file.exists():
+            logger.info(f"[FAISS] Index not found for viewport '{viewport_name}', triggering creation...")
+
+            # Trigger FAISS index creation in background thread
+            def create_faiss_in_background():
+                try:
+                    logger.info(f"[FAISS] Starting index creation for '{viewport_name}'...")
+                    project_root = Path(__file__).parent.parent
+                    result = subprocess.run(
+                        [sys.executable, 'create_faiss_index.py'],
+                        cwd=project_root,
+                        capture_output=True,
+                        text=True,
+                        timeout=600  # 10 minute timeout
+                    )
+                    if result.returncode == 0:
+                        logger.info(f"[FAISS] ✓ Index creation complete for '{viewport_name}'")
+                    else:
+                        logger.error(f"[FAISS] ✗ Index creation failed for '{viewport_name}':\n{result.stderr}")
+                except subprocess.TimeoutExpired:
+                    logger.error(f"[FAISS] ✗ Index creation timeout for '{viewport_name}'")
+                except Exception as e:
+                    logger.error(f"[FAISS] ✗ Error creating index for '{viewport_name}': {e}")
+
+            thread = threading.Thread(target=create_faiss_in_background, daemon=True)
+            thread.start()
+
+            if response_data['data_ready']:
+                response_data['message'] += '\nCreating FAISS index for similarity search (this may take 2-5 minutes)...'
+            response_data['faiss_ready'] = False
+        else:
+            logger.info(f"[FAISS] ✓ Index ready for viewport '{viewport_name}'")
+            response_data['faiss_ready'] = True
+
+        return jsonify(response_data)
     except FileNotFoundError:
         return jsonify({'success': False, 'error': f'Viewport not found'}), 404
     except Exception as e:
@@ -158,10 +316,15 @@ def api_create_viewport():
         viewport = read_viewport_file(name)
         viewport['name'] = name
 
+        # Automatically trigger data download and processing for new viewport
+        logger.info(f"[NEW VIEWPORT] Triggering data download for new viewport '{name}'...")
+        trigger_data_download_and_processing(name)
+
         return jsonify({
             'success': True,
-            'message': f'Created viewport: {name}',
-            'viewport': viewport
+            'message': f'Created viewport: {name}. Downloading data and creating pyramids in background (this may take 15-30 minutes)...',
+            'viewport': viewport,
+            'data_preparing': True
         })
     except FileExistsError as e:
         return jsonify({'success': False, 'error': str(e)}), 409
@@ -310,8 +473,9 @@ def run_download_process(task_id):
         # Check if mosaics already exist with matching bounds
         update_progress(8, "Checking for existing mosaic files...")
 
-        embeddings_mosaic = MOSAICS_DIR / 'bangalore_2024.tif'
-        satellite_mosaic = MOSAICS_DIR / 'bangalore_satellite_rgb.tif'
+        # Use viewport-specific filenames for proper caching across viewports
+        embeddings_mosaic = MOSAICS_DIR / f'{viewport_name}_embeddings_2024.tif'
+        satellite_mosaic = MOSAICS_DIR / f'{viewport_name}_satellite_rgb.tif'
 
         skip_downloads = False
         if embeddings_mosaic.exists() and satellite_mosaic.exists():
@@ -652,8 +816,11 @@ def api_extract_embedding():
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
 
-        # Open the embedding mosaic file
-        mosaic_file = MOSAICS_DIR / 'bangalore_2024.tif'
+        # Get active viewport for mosaic file
+        viewport_name = get_active_viewport_name()
+
+        # Open the embedding mosaic file (viewport-specific)
+        mosaic_file = MOSAICS_DIR / f'{viewport_name}_embeddings_2024.tif'
 
         if not mosaic_file.exists():
             return jsonify({
@@ -696,7 +863,8 @@ def api_extract_embedding():
 
             embedding = []
             for band_idx in range(all_bands.shape[0]):
-                pixel_value = int(all_bands[band_idx, center_y, center_x])
+                # Keep as float32 to match FAISS index (which uses float32)
+                pixel_value = float(all_bands[band_idx, center_y, center_x])
                 embedding.append(pixel_value)
 
             logger.info(f"Extracted embedding at ({lat:.6f}, {lon:.6f}) - pixel ({x_int}, {y_int})")
@@ -722,23 +890,23 @@ def api_search_similar_embeddings():
 
     Request body:
     {
-        "embedding": [128-dim array of uint8 values],
-        "threshold": 0.5,
-        "viewport_id": "malleswaram_500m"
+        "embedding": [128-dim array of float32 values],
+        "threshold": 5.0,
+        "viewport_id": "tile_aligned"
     }
 
     Response:
     {
         "success": true,
         "matches": [
-            {"lat": 13.0045, "lon": 77.5670, "distance": 0.123, "pixel": {"x": 100, "y": 200}},
+            {"lat": 13.0045, "lon": 77.5670, "distance": 3.456, "pixel": {"x": 100, "y": 200}},
             ...
         ],
         "query_stats": {
             "total_pixels": 1251042,
             "matches_found": 234,
             "computation_time_ms": 450,
-            "threshold": 0.5
+            "threshold": 5.0
         }
     }
     """
@@ -748,10 +916,19 @@ def api_search_similar_embeddings():
         # Parse request
         data = request.get_json()
 
-        # Clamp embedding values to valid uint8 range [0, 255] before conversion
+        # Convert embedding to float32 (embeddings are stored as float32 in the GeoTIFF)
         embedding_list = data.get('embedding')
-        clamped_embedding = np.clip(embedding_list, 0, 255).astype(np.uint8)
-        query_embedding = clamped_embedding
+
+        # Debug: log what we received
+        logger.info(f"[SEARCH] Received embedding type: {type(embedding_list)}, length: {len(embedding_list) if embedding_list else 'None'}")
+        if embedding_list and len(embedding_list) > 0:
+            logger.info(f"[SEARCH] First 5 values: {embedding_list[:5]}")
+            logger.info(f"[SEARCH] Value types: {type(embedding_list[0])}, sample: {embedding_list[0]}")
+
+        query_embedding = np.array(embedding_list, dtype=np.float32)
+
+        logger.info(f"[SEARCH] Converted to numpy: shape={query_embedding.shape}, dtype={query_embedding.dtype}")
+        logger.info(f"[SEARCH] Range: [{query_embedding.min():.4f}, {query_embedding.max():.4f}]")
 
         threshold = float(data.get('threshold', 0.5))
         viewport_id = data.get('viewport_id') or get_active_viewport_name()
@@ -762,10 +939,10 @@ def api_search_similar_embeddings():
                 'error': f'Invalid embedding dimension: {query_embedding.size}, expected 128'
             }), 400
 
-        if not (0.0 <= threshold <= 1.0):
+        if not (0.0 <= threshold <= 15.0):
             return jsonify({
                 'success': False,
-                'error': f'Invalid threshold: {threshold}, must be between 0.0 and 1.0'
+                'error': f'Invalid threshold: {threshold}, must be between 0.0 and 15.0'
             }), 400
 
         logger.info(f"[SEARCH] Query: threshold={threshold}, viewport={viewport_id}")
@@ -784,7 +961,7 @@ def api_search_similar_embeddings():
         start_time = time.time()
 
         try:
-            all_embeddings = np.load(str(faiss_dir / 'all_embeddings.npy'))  # (N, 128) uint8
+            all_embeddings = np.load(str(faiss_dir / 'all_embeddings.npy'))  # (N, 128) float32
             pixel_coords = np.load(str(faiss_dir / 'pixel_coords.npy'))       # (N, 2) int32
 
             with open(faiss_dir / 'metadata.json') as f:
@@ -798,19 +975,34 @@ def api_search_similar_embeddings():
 
         logger.info(f"[SEARCH] Loaded {len(all_embeddings):,} embeddings")
 
-        # Normalize embeddings to float32 [0-1]
-        query_emb_f32 = query_embedding.astype(np.float32) / 255.0  # (128,)
-        all_emb_f32 = all_embeddings.astype(np.float32) / 255.0     # (N, 128)
+        # Use embeddings as-is (already float32 in native range, no normalization needed)
+        query_emb_f32 = query_embedding.astype(np.float32)  # (128,)
+        all_emb_f32 = all_embeddings.astype(np.float32)     # (N, 128)
 
         # Compute L2 distances: sqrt(sum((a - b)^2))
         logger.info(f"[SEARCH] Computing L2 distances for {len(all_embeddings):,} pixels...")
         diff = all_emb_f32 - query_emb_f32[np.newaxis, :]  # (N, 128)
         distances = np.sqrt(np.sum(diff ** 2, axis=1))      # (N,)
 
+        # Log distance statistics
+        logger.info(f"[SEARCH] Distance statistics: min={distances.min():.4f}, max={distances.max():.4f}, mean={distances.mean():.4f}, median={np.median(distances):.4f}")
+        nan_count = np.isnan(distances).sum()
+        inf_count = np.isinf(distances).sum()
+        if nan_count > 0:
+            logger.warning(f"[SEARCH] Found {nan_count} NaN distances!")
+        if inf_count > 0:
+            logger.warning(f"[SEARCH] Found {inf_count} Inf distances!")
+
         # Filter by threshold
         logger.info(f"[SEARCH] Filtering by threshold {threshold}...")
         similar_indices = np.where(distances <= threshold)[0]
         logger.info(f"[SEARCH] Found {len(similar_indices):,} pixels within threshold")
+        if len(similar_indices) > 0:
+            logger.info(f"[SEARCH] Closest match distance: {distances[similar_indices].min():.4f}")
+        else:
+            # Log closest pixels even if none match threshold
+            closest_10 = np.argsort(distances)[:10]
+            logger.info(f"[SEARCH] No matches. Closest 10 distances: {distances[closest_10]}")
 
         # Limit results to prevent overwhelming the client
         MAX_RESULTS = 10000
@@ -944,8 +1136,8 @@ def api_relabel_by_similarity():
         label_avgs = {}
         for label, embeddings in label_embeddings.items():
             if embeddings:  # Only if label has embeddings
-                # Clamp embeddings to valid uint8 range before processing
-                emb_array = np.clip(embeddings, 0, 255).astype(np.uint8)
+                # Keep as float32 - embeddings are already in their native range, not uint8
+                emb_array = np.array(embeddings, dtype=np.float32)
                 label_avgs[label] = np.mean(emb_array, axis=0)
                 logger.info(f"[RELABEL]   {label}: {len(embeddings)} embeddings → avg")
             else:
@@ -964,14 +1156,13 @@ def api_relabel_by_similarity():
 
         for key, pixel_data in labeled_pixels.items():
             current_label = pixel_data['label']
-            # Clamp pixel embedding to valid uint8 range before processing
-            pixel_embedding = np.clip(pixel_data['embedding'], 0, 255).astype(np.uint8)
-            pixel_emb_f32 = pixel_embedding.astype(np.float32) / 255.0
+            # Keep as float32 - embeddings are already in their native range, not uint8
+            pixel_emb_f32 = np.array(pixel_data['embedding'], dtype=np.float32)
 
             # Calculate L2 distance to each label's average
             distances = {}
             for label, label_avg in label_avgs.items():
-                label_avg_f32 = label_avg.astype(np.float32) / 255.0
+                label_avg_f32 = label_avg.astype(np.float32)
                 diff = pixel_emb_f32 - label_avg_f32
                 distance = float(np.sqrt(np.sum(diff ** 2)))
                 distances[label] = distance

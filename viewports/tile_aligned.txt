@@ -8,10 +8,10 @@ Center (degrees):
   Longitude: 77.5500°
 
 Bounds (degrees):
-  Min Latitude:  12.9990°
+  Min Latitude:  12.9991°
   Max Latitude:  13.1010°
   Min Longitude: 77.4990°
-  Max Longitude: 77.6011°
+  Max Longitude: 77.6010°
 
 Size: 10.0km × 10.0km
 

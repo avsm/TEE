@@ -86,11 +86,11 @@ The project comes with three preset viewports:
    - Bounds: 77.499°E to 77.6011°E, 12.999°N to 13.101°N
 
 2. **bangalore_10km**
-   - Generic 10km × 10km viewport centered on Bangalore
+   - 10km × 10km viewport preset (legacy name for Bangalore region)
    - Bounds: 77.5446°E to 77.6446°E, 12.9216°N to 13.0216°N
 
 3. **malleswaram_500m**
-   - 500m area in Malleswaram (inner 10km viewport)
+   - 500m × 500m viewport preset (region within Bangalore)
    - Bounds: 77.5659°E to 77.5751°E, 13.0039°N to 13.0129°N
 
 ## Data Files
@@ -101,9 +101,9 @@ Viewport configurations are stored in the `viewports/` directory:
 viewports/
 ├── viewport.txt          # Symlink to active viewport
 ├── .active               # Text file with active viewport name
-├── tile_aligned.txt      # Tile-aligned preset
-├── bangalore_10km.txt    # Bangalore preset
-├── malleswaram_500m.txt  # Malleswaram preset
+├── tile_aligned.txt      # Tile-aligned preset (default)
+├── bangalore_10km.txt    # Preset viewport (Bangalore region)
+├── malleswaram_500m.txt  # Preset viewport (Malleswaram region)
 └── README.md             # Viewport system documentation
 ```
 
