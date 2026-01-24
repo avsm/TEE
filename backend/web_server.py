@@ -70,6 +70,39 @@ def check_viewport_pyramids_exist(viewport_name):
 
     return pyramid_file.exists() and satellite_pyramid.exists()
 
+def get_viewport_data_size(viewport_name, active_viewport_name):
+    """Calculate total data size for a viewport in MB."""
+    total_size = 0
+
+    # Mosaic files (viewport-specific)
+    if MOSAICS_DIR.exists():
+        for mosaic_file in MOSAICS_DIR.glob(f'{viewport_name}_*.tif'):
+            if mosaic_file.is_file():
+                total_size += mosaic_file.stat().st_size
+
+    # FAISS indices (viewport-specific)
+    faiss_dir = FAISS_INDICES_DIR / viewport_name
+    if faiss_dir.exists():
+        for item in faiss_dir.rglob('*'):
+            if item.is_file():
+                total_size += item.stat().st_size
+
+    # Pyramids (only include if this is the active viewport, since pyramids are shared)
+    if viewport_name == active_viewport_name:
+        pyramid_dirs = [
+            PYRAMIDS_DIR / '2024',
+            PYRAMIDS_DIR / 'satellite',
+            PYRAMIDS_DIR / 'pca'
+        ]
+        for pyr_dir in pyramid_dirs:
+            if pyr_dir.exists():
+                for item in pyr_dir.rglob('*'):
+                    if item.is_file():
+                        total_size += item.stat().st_size
+
+    # Convert to MB
+    return round(total_size / (1024 * 1024), 1)
+
 def trigger_data_download_and_processing(viewport_name):
     """Download embeddings and satellite RGB, then create pyramids."""
     def download_and_process():
@@ -144,6 +177,8 @@ def api_list_viewports():
                 viewport = read_viewport_file(viewport_name)
                 viewport['name'] = viewport_name
                 viewport['is_active'] = (viewport_name == active_name)
+                # Calculate and include data size
+                viewport['data_size_mb'] = get_viewport_data_size(viewport_name, active_name)
                 viewport_data.append(viewport)
             except Exception as e:
                 logger.warning(f"Error reading viewport {viewport_name}: {e}")

@@ -999,11 +999,16 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
                 const isActive = vp.is_active ? 'active' : '';
                 const bounds = vp.bounds;
                 const coordsText = `${bounds.minLon.toFixed(4)}°, ${bounds.minLat.toFixed(4)}°`;
+                const dataSize = vp.data_size_mb || 0;
+                const sizeText = dataSize > 1000
+                    ? `${(dataSize / 1024).toFixed(1)} GB`
+                    : `${dataSize.toFixed(0)} MB`;
 
                 return `
                     <div class="viewport-item ${isActive}">
                         <div class="viewport-item-name" onclick="switchViewport('${vp.name}')" style="cursor: pointer;">${vp.name}</div>
                         <div class="viewport-item-coords">${coordsText}</div>
+                        <div class="viewport-item-coords" style="color: #0066cc; font-weight: 500; margin-top: 3px;">💾 ${sizeText}</div>
                         <div class="viewport-item-actions">
                             <button class="viewport-item-btn" onclick="switchViewport('${vp.name}')">Select</button>
                             <button class="viewport-item-btn delete" onclick="deleteViewport('${vp.name}')">Delete</button>
