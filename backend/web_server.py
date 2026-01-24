@@ -769,24 +769,42 @@ def api_delete_viewport():
                     except Exception as e:
                         logger.warning(f"Error checking mosaic {mosaic_file}: {e}")
 
-        # Delete pyramid files (all .tif files in pyramids directory)
-        pyramids_dir = PYRAMIDS_DIR / '2024'
-        if pyramids_dir.exists():
-            try:
-                # Delete all pyramid files for this viewport
-                for pyramid_file in pyramids_dir.glob('*.tif'):
-                    pyramid_file.unlink()
-                    deleted_items.append(f"pyramid: {pyramid_file.name}")
-                    logger.info(f"✓ Deleted pyramid: {pyramid_file.name}")
+        # Delete pyramid files for all types (embeddings, satellite, pca)
+        pyramid_dirs_to_clean = [
+            PYRAMIDS_DIR / '2024',      # Embeddings pyramids
+            PYRAMIDS_DIR / 'satellite',  # Satellite RGB pyramids
+            PYRAMIDS_DIR / 'pca'         # PCA pyramids
+        ]
 
-                # Delete pyramid metadata if it exists
-                pyramid_metadata = pyramids_dir / 'pyramid_metadata.json'
-                if pyramid_metadata.exists():
-                    pyramid_metadata.unlink()
-                    deleted_items.append("pyramid_metadata.json")
-                    logger.info("✓ Deleted pyramid_metadata.json")
+        for pyramids_dir in pyramid_dirs_to_clean:
+            if pyramids_dir.exists():
+                try:
+                    # Delete all pyramid files for this viewport
+                    for pyramid_file in pyramids_dir.glob('*.tif'):
+                        pyramid_file.unlink()
+                        deleted_items.append(f"pyramid: {pyramid_file.name}")
+                        logger.info(f"✓ Deleted pyramid: {pyramid_file.name}")
+
+                    # Delete pyramid metadata if it exists
+                    pyramid_metadata = pyramids_dir / 'pyramid_metadata.json'
+                    if pyramid_metadata.exists():
+                        pyramid_metadata.unlink()
+                        deleted_items.append(f"pyramid_metadata.json ({pyramids_dir.name})")
+                        logger.info(f"✓ Deleted pyramid_metadata.json from {pyramids_dir.name}")
+                except Exception as e:
+                    logger.warning(f"Error deleting pyramid files from {pyramids_dir.name}: {e}")
+
+        # Delete FAISS indices directory for this viewport
+        if FAISS_INDICES_DIR.exists():
+            try:
+                faiss_viewport_dir = FAISS_INDICES_DIR / viewport_name
+                if faiss_viewport_dir.exists():
+                    import shutil
+                    shutil.rmtree(faiss_viewport_dir)
+                    deleted_items.append(f"FAISS index directory: {viewport_name}/")
+                    logger.info(f"✓ Deleted FAISS index directory: {viewport_name}/")
             except Exception as e:
-                logger.warning(f"Error deleting pyramid files: {e}")
+                logger.warning(f"Error deleting FAISS index directory for {viewport_name}: {e}")
 
         # Delete the viewport file
         viewport_file.unlink()
