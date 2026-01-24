@@ -104,7 +104,7 @@ def get_viewport_data_size(viewport_name, active_viewport_name):
     return round(total_size / (1024 * 1024), 1)
 
 def trigger_data_download_and_processing(viewport_name):
-    """Download embeddings and satellite RGB, then create pyramids."""
+    """Download embeddings and satellite RGB with retries, then create pyramids."""
     def download_and_process():
         try:
             project_root = Path(__file__).parent.parent
@@ -124,21 +124,49 @@ def trigger_data_download_and_processing(viewport_name):
                 return
             logger.info(f"[DATA] ✓ Embeddings downloaded for '{viewport_name}'")
 
-            # Download satellite RGB
-            logger.info(f"[DATA] Downloading satellite RGB for '{viewport_name}'...")
-            result = subprocess.run(
-                [sys.executable, 'download_satellite_rgb.py'],
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                timeout=1800  # 30 minute timeout
-            )
-            if result.returncode != 0:
-                logger.error(f"[DATA] ✗ Satellite RGB download failed for '{viewport_name}':\n{result.stderr}")
-                return
-            logger.info(f"[DATA] ✓ Satellite RGB downloaded for '{viewport_name}'")
+            # Download satellite RGB with retry logic
+            max_retries = 3
+            satellite_success = False
+            for attempt in range(1, max_retries + 1):
+                logger.info(f"[DATA] Downloading satellite RGB for '{viewport_name}' (attempt {attempt}/{max_retries})...")
+                try:
+                    result = subprocess.run(
+                        [sys.executable, 'download_satellite_rgb.py'],
+                        cwd=project_root,
+                        capture_output=True,
+                        text=True,
+                        timeout=1800  # 30 minute timeout
+                    )
+                    if result.returncode == 0:
+                        logger.info(f"[DATA] ✓ Satellite RGB downloaded for '{viewport_name}'")
+                        satellite_success = True
+                        break
+                    else:
+                        logger.warning(f"[DATA] Attempt {attempt} failed: {result.stderr[:200]}")
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"[DATA] Attempt {attempt} timeout")
+                except Exception as e:
+                    logger.warning(f"[DATA] Attempt {attempt} error: {e}")
 
-            # Create pyramids
+                # Wait before retry (except on last attempt)
+                if attempt < max_retries:
+                    logger.info(f"[DATA] Retrying in 30 seconds...")
+                    import time
+                    time.sleep(30)
+
+            if not satellite_success:
+                logger.warning(f"[DATA] ⚠️  Satellite RGB download failed after {max_retries} attempts - will continue with embeddings only")
+                # Don't return here - continue with pyramid creation even if satellite fails
+
+            # Verify satellite RGB exists before pyramid creation
+            viewport = read_viewport_file(viewport_name)
+            satellite_file = MOSAICS_DIR / f"{viewport_name}_satellite_rgb.tif"
+            if satellite_file.exists():
+                logger.info(f"[DATA] ✓ Satellite RGB verified: {satellite_file}")
+            else:
+                logger.warning(f"[DATA] ⚠️  Satellite RGB not available: {satellite_file}")
+
+            # Create pyramids (will work with or without satellite data)
             logger.info(f"[DATA] Creating pyramids for '{viewport_name}'...")
             result = subprocess.run(
                 [sys.executable, 'create_pyramids.py'],
