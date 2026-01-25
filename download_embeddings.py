@@ -56,6 +56,9 @@ def download_embeddings():
     # Initialize GeoTessera with embeddings directory
     tessera = gt.GeoTessera(embeddings_dir=str(EMBEDDINGS_DIR))
 
+    # Track whether current viewport's mosaic was successfully created
+    viewport_mosaic_created = False
+
     for year in YEARS:
         print(f"\n📅 Processing year {year}...")
         progress.update("processing", f"Processing year {year}...", current_file=f"embeddings_{year}")
@@ -151,26 +154,24 @@ def download_embeddings():
             size_mb = output_file.stat().st_size / (1024*1024)
             print(f"   ✓ Saved: {output_file} ({size_mb:.2f} MB)")
             progress.update("processing", f"Saved {size_mb:.1f} MB", current_value=int(size_mb), current_file=f"embeddings_{year}")
+            viewport_mosaic_created = True
 
     print("\n" + "=" * 60)
     print("Download complete!")
     print(f"\nTiles cached in: {EMBEDDINGS_DIR.absolute()}")
     print(f"Mosaics saved in: {MOSAICS_DIR.absolute()}")
 
-    # List downloaded mosaics
-    files = list(MOSAICS_DIR.glob("*.tif"))
-    if files:
-        print(f"\n✓ Created {len(files)} mosaics:")
-        total_size = 0
-        for f in sorted(files):
-            size_mb = f.stat().st_size / (1024*1024)
-            total_size += size_mb
-            print(f"  - {f.name} ({size_mb:.2f} MB)")
-        print(f"\nTotal size: {total_size:.2f} MB")
-        progress.complete(f"Downloaded {total_size:.1f} MB of embeddings")
+    # Check if this viewport's mosaic was successfully created
+    viewport_mosaic_file = MOSAICS_DIR / f"{viewport_id}_embeddings_2024.tif"
+
+    if viewport_mosaic_file.exists():
+        size_mb = viewport_mosaic_file.stat().st_size / (1024*1024)
+        print(f"\n✓ Created mosaic for {viewport_id}:")
+        print(f"  - {viewport_mosaic_file.name} ({size_mb:.2f} MB)")
+        progress.complete(f"Downloaded {size_mb:.1f} MB of embeddings")
     else:
-        print("\n⚠️  No mosaics were created.")
-        progress.complete("No new mosaics downloaded (already cached)")
+        print(f"\n✗ Error: Mosaic for {viewport_id} was not created (all downloads failed)")
+        progress.error(f"Failed to download embeddings after {3} attempts")
 
 if __name__ == "__main__":
     download_embeddings()

@@ -122,6 +122,12 @@ def trigger_data_download_and_processing(viewport_name):
                 return
             logger.info(f"[DATA] ✓ Embeddings downloaded for '{viewport_name}'")
 
+            # Verify embeddings mosaic was actually created
+            embeddings_file = MOSAICS_DIR / f"{viewport_name}_embeddings_2024.tif"
+            if not embeddings_file.exists():
+                logger.error(f"[DATA] ✗ Embeddings mosaic file not found for '{viewport_name}' after download")
+                return
+
             # Create pyramids (satellite layer uses Esri World Imagery)
             logger.info(f"[DATA] Creating pyramids for '{viewport_name}'...")
             result = run_script('create_pyramids.py', timeout=1800)
