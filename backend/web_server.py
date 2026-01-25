@@ -65,12 +65,12 @@ def run_script(script_name, *args, timeout=1800):
     return subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=timeout)
 
 def check_viewport_mosaics_exist(viewport_name):
-    """Check if embeddings mosaic exists for a viewport."""
+    """Check if embeddings mosaic exists for a viewport (satellite uses Esri/Bing imagery)."""
     embeddings_file = MOSAICS_DIR / f"{viewport_name}_embeddings_2024.tif"
     return embeddings_file.exists()
 
 def check_viewport_pyramids_exist(viewport_name):
-    """Check if pyramid tiles exist for a viewport."""
+    """Check if pyramid tiles exist for a viewport (embeddings only, satellite uses Esri/Bing)."""
     viewport_pyramids_dir = PYRAMIDS_DIR / viewport_name
     pyramid_file = viewport_pyramids_dir / "2024" / "level_0.tif"
     return pyramid_file.exists()
@@ -103,13 +103,13 @@ def get_viewport_data_size(viewport_name, active_viewport_name):
     return round(total_size / (1024 * 1024), 1)
 
 def trigger_data_download_and_processing(viewport_name):
-    """Download embeddings and create pyramids."""
+    """Download embeddings and create pyramids. Satellite data uses Bing/Esri imagery."""
     def download_and_process():
         try:
             project_root = Path(__file__).parent.parent
             logger.info(f"[DATA] Starting download for viewport '{viewport_name}'...")
 
-            # Download embeddings
+            # Download embeddings only (satellite uses Bing/Esri imagery)
             logger.info(f"[DATA] Downloading embeddings for '{viewport_name}'...")
             result = run_script('download_embeddings.py', timeout=1800)
             if result.returncode != 0:
@@ -123,7 +123,7 @@ def trigger_data_download_and_processing(viewport_name):
                 logger.error(f"[DATA] ✗ Embeddings mosaic file not found for '{viewport_name}' after download")
                 return
 
-            # Create pyramids
+            # Create pyramids (satellite layer uses Esri World Imagery)
             logger.info(f"[DATA] Creating pyramids for '{viewport_name}'...")
             result = run_script('create_pyramids.py', timeout=1800)
             if result.returncode != 0:
@@ -373,6 +373,43 @@ def api_download_embeddings():
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
+@app.route('/api/downloads/satellite', methods=['POST'])
+def api_download_satellite():
+    """Download satellite RGB for the current viewport."""
+    try:
+        import subprocess
+        project_root = Path(__file__).parent.parent
+
+        # Get current viewport info
+        viewport = get_active_viewport()
+        logger.info(f"Downloading satellite RGB for viewport: {viewport['viewport_id']}")
+
+        # Run the download script
+        result = run_script('download_satellite_rgb.py', timeout=600)
+
+        if result.returncode == 0:
+            logger.info("Satellite RGB download completed successfully")
+            return jsonify({
+                'success': True,
+                'message': 'Satellite RGB downloaded successfully',
+                'viewport': viewport['viewport_id']
+            })
+        else:
+            error_msg = result.stderr or result.stdout
+            logger.error(f"Satellite RGB download failed: {error_msg}")
+            return jsonify({
+                'success': False,
+                'error': f'Download failed: {error_msg}'
+            }), 400
+
+    except subprocess.TimeoutExpired:
+        logger.error("Satellite RGB download timeout")
+        return jsonify({'success': False, 'error': 'Download timeout'}), 408
+    except Exception as e:
+        logger.error(f"Error downloading satellite RGB: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
 def run_download_process(task_id):
     """Background task to run downloads and processing in parallel."""
     import subprocess
@@ -428,9 +465,10 @@ def run_download_process(task_id):
 
         # Use viewport-specific filenames for proper caching across viewports
         embeddings_mosaic = MOSAICS_DIR / f'{viewport_name}_embeddings_2024.tif'
+        satellite_mosaic = MOSAICS_DIR / f'{viewport_name}_satellite_rgb.tif'
 
         skip_downloads = False
-        if embeddings_mosaic.exists():
+        if embeddings_mosaic.exists() and satellite_mosaic.exists():
             try:
                 # Check if mosaics contain the viewport area (containment, not exact match)
                 with rasterio.open(embeddings_mosaic) as src:
