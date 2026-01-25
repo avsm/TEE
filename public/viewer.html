@@ -150,6 +150,104 @@
             font-size: 14px;
             font-weight: bold;
         }
+
+        /* Progress Modal */
+        #progress-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #progress-overlay.active {
+            display: flex;
+        }
+
+        #progress-modal {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+        }
+
+        #progress-modal h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+
+        #progress-message {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 15px;
+            word-break: break-word;
+        }
+
+        #progress-file {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+            font-style: italic;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .progress-bar-container {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            height: 24px;
+            overflow: hidden;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #17a2b8, #0d8fa3);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+        }
+
+        #progress-percent {
+            font-size: 13px;
+            color: #aaa;
+            text-align: right;
+            margin-bottom: 12px;
+        }
+
+        #progress-status {
+            font-size: 12px;
+            color: #17a2b8;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #progress-status.complete {
+            color: #28a745;
+        }
+
+        #progress-status.error {
+            color: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -233,6 +331,22 @@
 
     <div id="status">
         <strong>Labeling Instructions:</strong> 1) Create label(s) with "+ Create Label" • 2) Select active label from dropdown • 3) Click "Start Labeling" • 4) Click on embeddings to label them (colors show labels) • 5) Click "Stop Labeling" when done • 6) Click "Export Labels" to save JSON • All maps are synchronized
+    </div>
+
+    <!-- Progress Modal -->
+    <div id="progress-overlay">
+        <div id="progress-modal">
+            <h2 id="progress-title">Processing...</h2>
+            <div id="progress-file"></div>
+            <div id="progress-message"></div>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" id="progress-bar">
+                    <span id="progress-bar-text"></span>
+                </div>
+            </div>
+            <div id="progress-percent">0%</div>
+            <div id="progress-status">Starting...</div>
+        </div>
     </div>
 
     <script>
@@ -1554,10 +1668,104 @@
             }
         });
 
+        // ===== PROGRESS TRACKING =====
+        let progressPollInterval = null;
+
+        function showProgressModal(title) {
+            console.log(`[PROGRESS] Starting operation: ${title}`);
+            document.getElementById('progress-title').textContent = title;
+            document.getElementById('progress-overlay').classList.add('active');
+        }
+
+        function hideProgressModal() {
+            console.log('[PROGRESS] Hiding progress modal');
+            document.getElementById('progress-overlay').classList.remove('active');
+
+            if (progressPollInterval) {
+                clearInterval(progressPollInterval);
+                progressPollInterval = null;
+            }
+        }
+
+        function updateProgressUI(data) {
+            // Update message
+            document.getElementById('progress-message').textContent = data.message || '';
+
+            // Update current file
+            const fileEl = document.getElementById('progress-file');
+            if (data.current_file) {
+                fileEl.textContent = `File: ${data.current_file}`;
+                fileEl.style.display = 'block';
+            } else {
+                fileEl.style.display = 'none';
+            }
+
+            // Update progress bar
+            const percent = data.percent || 0;
+            const progressBar = document.getElementById('progress-bar');
+            const progressBarText = document.getElementById('progress-bar-text');
+            progressBar.style.width = percent + '%';
+            if (percent > 0) {
+                progressBarText.textContent = percent + '%';
+            }
+
+            // Update percent display
+            document.getElementById('progress-percent').textContent = percent + '%';
+
+            // Update status
+            const statusEl = document.getElementById('progress-status');
+            statusEl.textContent = (data.status || 'processing').toUpperCase();
+            statusEl.className = 'progress-status ' + (data.status || 'processing');
+        }
+
+        async function pollOperationProgress(operationId, title) {
+            showProgressModal(title);
+
+            let isComplete = false;
+
+            progressPollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/operations/progress/${operationId}`);
+                    const result = await response.json();
+
+                    if (result.success && result.status) {
+                        const data = result;
+                        updateProgressUI(data);
+
+                        console.log(`[PROGRESS] ${operationId}: ${data.message} (${data.percent}%)`);
+
+                        // Check if operation is complete or failed
+                        if (data.status === 'complete' || data.status === 'error') {
+                            isComplete = true;
+
+                            // Show final message for 2 seconds
+                            setTimeout(() => {
+                                hideProgressModal();
+                            }, 2000);
+
+                            // Clear interval
+                            clearInterval(progressPollInterval);
+                            progressPollInterval = null;
+                        }
+                    }
+                } catch (error) {
+                    console.error('[PROGRESS] Error polling progress:', error);
+                    // Continue polling even if there's an error
+                }
+            }, 500); // Poll every 500ms
+        }
+
+        // ===== END PROGRESS TRACKING =====
+
         // Initialize
         window.onload = async function() {
             // Load viewport info first (determines map center/zoom)
             await updateMapViewport();
+
+            // Start polling for any ongoing operations
+            if (currentViewportName) {
+                checkAndPollOperations(currentViewportName);
+            }
 
             // Then create maps with correct viewport
             createMaps();
@@ -1575,6 +1783,33 @@
                     alert('Warning: Tile server not responding. Make sure it is running on port 5125.');
                 });
         };
+
+        // Check for ongoing operations and start polling if found
+        async function checkAndPollOperations(viewportId) {
+            const operations = ['embeddings', 'pyramids', 'faiss'];
+
+            for (const op of operations) {
+                const operationId = `${viewportId}_${op}`;
+                try {
+                    const response = await fetch(`/api/operations/progress/${operationId}`);
+                    const result = await response.json();
+
+                    if (result.success && result.status && result.status !== 'complete') {
+                        console.log(`[PROGRESS] Found ongoing operation: ${operationId}`);
+                        const titles = {
+                            'embeddings': '📥 Downloading Embeddings',
+                            'pyramids': '🔨 Creating Pyramids',
+                            'faiss': '🔍 Building FAISS Index'
+                        };
+                        await pollOperationProgress(operationId, titles[op]);
+                        // Poll the next operation after this one completes
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } catch (error) {
+                    // Operation not found or error checking - continue to next operation
+                }
+            }
+        }
     </script>
 </body>
 </html>

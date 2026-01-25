@@ -443,6 +443,103 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Progress Modal */
+        #progress-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #progress-overlay.active {
+            display: flex;
+        }
+
+        #progress-modal {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        #progress-modal h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        #progress-message {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+            word-break: break-word;
+        }
+
+        #progress-file {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 10px;
+            font-style: italic;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .progress-bar-container {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            height: 24px;
+            overflow: hidden;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+        }
+
+        #progress-percent {
+            font-size: 13px;
+            color: #666;
+            text-align: right;
+            margin-bottom: 12px;
+        }
+
+        #progress-status {
+            font-size: 12px;
+            color: #667eea;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #progress-status.complete {
+            color: #28a745;
+        }
+
+        #progress-status.error {
+            color: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -544,6 +641,22 @@
                 <div class="map-info-label" id="mapInfoLabel">Click on map</div>
                 <div class="map-info-value" id="mapInfoValue">to select viewport center</div>
             </div>
+        </div>
+    </div>
+
+    <!-- Progress Modal -->
+    <div id="progress-overlay">
+        <div id="progress-modal">
+            <h2 id="progress-title">Processing...</h2>
+            <div id="progress-file"></div>
+            <div id="progress-message"></div>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" id="progress-bar">
+                    <span id="progress-bar-text"></span>
+                </div>
+            </div>
+            <div id="progress-percent">0%</div>
+            <div id="progress-status">Starting...</div>
         </div>
     </div>
 
@@ -1018,6 +1131,117 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
             }).join('');
         }
 
+        // Progress tracking functions
+        let progressPollInterval = null;
+
+        function showProgressModal(title) {
+            console.log(`[PROGRESS] Starting operation: ${title}`);
+            document.getElementById('progress-title').textContent = title;
+            document.getElementById('progress-overlay').classList.add('active');
+        }
+
+        function hideProgressModal() {
+            console.log('[PROGRESS] Hiding progress modal');
+            document.getElementById('progress-overlay').classList.remove('active');
+
+            if (progressPollInterval) {
+                clearInterval(progressPollInterval);
+                progressPollInterval = null;
+            }
+        }
+
+        function updateProgressUI(data) {
+            // Update message
+            document.getElementById('progress-message').textContent = data.message || '';
+
+            // Update current file
+            const fileEl = document.getElementById('progress-file');
+            if (data.current_file) {
+                fileEl.textContent = `File: ${data.current_file}`;
+                fileEl.style.display = 'block';
+            } else {
+                fileEl.style.display = 'none';
+            }
+
+            // Update progress bar
+            const percent = data.percent || 0;
+            const progressBar = document.getElementById('progress-bar');
+            const progressBarText = document.getElementById('progress-bar-text');
+            progressBar.style.width = percent + '%';
+            if (percent > 0) {
+                progressBarText.textContent = percent + '%';
+            }
+
+            // Update percent display
+            document.getElementById('progress-percent').textContent = percent + '%';
+
+            // Update status
+            const statusEl = document.getElementById('progress-status');
+            statusEl.textContent = (data.status || 'processing').toUpperCase();
+            statusEl.className = 'progress-status ' + (data.status || 'processing');
+        }
+
+        async function pollOperationProgress(operationId, title) {
+            showProgressModal(title);
+
+            return new Promise((resolve) => {
+                progressPollInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch(`/api/operations/progress/${operationId}`);
+                        const result = await response.json();
+
+                        if (result.success && result.status) {
+                            const data = result;
+                            updateProgressUI(data);
+
+                            console.log(`[PROGRESS] ${operationId}: ${data.message} (${data.percent}%)`);
+
+                            // Check if operation is complete or failed
+                            if (data.status === 'complete' || data.status === 'error') {
+                                // Show final message for 2 seconds
+                                setTimeout(() => {
+                                    hideProgressModal();
+                                    resolve();
+                                }, 2000);
+
+                                // Clear interval
+                                clearInterval(progressPollInterval);
+                                progressPollInterval = null;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('[PROGRESS] Error polling progress:', error);
+                    }
+                }, 500); // Poll every 500ms
+            });
+        }
+
+        async function pollAllOperations(viewportId) {
+            const operations = ['embeddings', 'pyramids', 'faiss'];
+            const titles = {
+                'embeddings': '📥 Downloading Embeddings',
+                'pyramids': '🔨 Creating Pyramids',
+                'faiss': '🔍 Building FAISS Index'
+            };
+
+            for (const op of operations) {
+                const operationId = `${viewportId}_${op}`;
+                try {
+                    const response = await fetch(`/api/operations/progress/${operationId}`);
+                    const result = await response.json();
+
+                    if (result.success && result.status && result.status !== 'complete') {
+                        console.log(`[PROGRESS] Found ongoing operation: ${operationId}`);
+                        await pollOperationProgress(operationId, titles[op]);
+                        // Small delay before checking next operation
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } catch (error) {
+                    // Operation not found - continue to next
+                }
+            }
+        }
+
         // Switch to viewport
         async function switchViewport(name) {
             try {
@@ -1035,10 +1259,10 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
                     drawViewportBox();
                     loadViewports(); // Refresh list to show active indicator
 
-                    // Show message about FAISS index status
+                    // Show progress tracking for any ongoing operations
                     if (!data.faiss_ready) {
-                        console.log(`[VIEWPORT] FAISS index is being created in background for "${name}". This may take 2-5 minutes. Embeddings will be available once creation completes.`);
-                        alert(`✓ Switched to viewport: ${name}\n\n⏳ Creating embeddings index (2-5 minutes)...\n\nYou can continue working. Embeddings will be available once creation completes.`);
+                        console.log(`[VIEWPORT] Starting progress tracking for "${name}"`);
+                        await pollAllOperations(name);
                     } else {
                         console.log(`[VIEWPORT] FAISS index ready for "${name}"`);
                     }
