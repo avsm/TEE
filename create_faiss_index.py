@@ -71,7 +71,7 @@ def create_faiss_index():
 
     # Initialize progress tracker
     progress = ProgressTracker(f"{viewport_id}_faiss")
-    progress.update("starting", f"Initializing FAISS index creation for {viewport_id}...")
+    progress.update("starting", f"Creating FAISS index for {viewport_id}...")
 
     # Find mosaic file (viewport-specific)
     mosaic_file = MOSAICS_DIR / f"{viewport_id}_embeddings_2024.tif"
