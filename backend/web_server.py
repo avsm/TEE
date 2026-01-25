@@ -617,21 +617,35 @@ def api_downloads_progress(task_id):
             'error': task['error']
         }
 
-        # Check for detailed operation progress (e.g., embeddings download)
+        # Check for detailed operation progress (embeddings, pyramids, or FAISS)
         try:
             viewport = get_active_viewport()
             viewport_name = viewport['viewport_id']
 
-            # Check for embeddings operation progress file
-            embeddings_progress_file = Path(f"/tmp/{viewport_name}_embeddings_progress.json")
-            if embeddings_progress_file.exists():
-                with open(embeddings_progress_file, 'r') as f:
-                    op_progress = json.load(f)
-                    # Include detailed message if available
-                    if op_progress.get('message'):
-                        response['detailed_message'] = op_progress['message']
-                    if op_progress.get('current_file'):
-                        response['current_file'] = op_progress['current_file']
+            # Find the most recently modified progress file
+            latest_progress_file = None
+            latest_mtime = 0
+
+            for op_type in ['embeddings', 'pyramids', 'faiss']:
+                progress_file = Path(f"/tmp/{viewport_name}_{op_type}_progress.json")
+                if progress_file.exists():
+                    mtime = progress_file.stat().st_mtime
+                    if mtime > latest_mtime:
+                        latest_mtime = mtime
+                        latest_progress_file = progress_file
+
+            # Load the most recent progress file
+            if latest_progress_file:
+                try:
+                    with open(latest_progress_file, 'r') as f:
+                        op_progress = json.load(f)
+                        # Include detailed message if available
+                        if op_progress.get('message'):
+                            response['detailed_message'] = op_progress['message']
+                        if op_progress.get('current_file'):
+                            response['current_file'] = op_progress['current_file']
+                except (json.JSONDecodeError, IOError):
+                    pass
         except Exception:
             # If detailed progress isn't available, just use the simplified progress
             pass

@@ -1,0 +1,21 @@
+Viewport Configuration
+=====================
+
+Viewport ID: santorini
+
+Center (degrees):
+  Latitude:  36.3932°
+  Longitude: 25.4615°
+
+Bounds (degrees):
+  Min Latitude:  36.3707°
+  Max Latitude:  36.4157°
+  Min Longitude: 25.4390°
+  Max Longitude: 25.4840°
+
+Size: 5km × 5km
+
+Description: 5km × 5km
+
+Generated: 2026-01-25T14:40:00.000000
+
