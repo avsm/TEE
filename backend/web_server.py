@@ -739,25 +739,14 @@ def api_delete_viewport():
 
         deleted_items = []
 
-        # Delete associated mosaic files
-        if bounds:
-            if MOSAICS_DIR.exists():
-                for mosaic_file in MOSAICS_DIR.glob('*.tif'):
-                    try:
-                        with rasterio.open(mosaic_file) as src:
-                            cached_bounds = src.bounds
-
-                            # Check if bounds match (within tolerance)
-                            if (abs(cached_bounds.left - bounds['minLon']) < BOUNDS_TOLERANCE and
-                                abs(cached_bounds.bottom - bounds['minLat']) < BOUNDS_TOLERANCE and
-                                abs(cached_bounds.right - bounds['maxLon']) < BOUNDS_TOLERANCE and
-                                abs(cached_bounds.top - bounds['maxLat']) < BOUNDS_TOLERANCE):
-
-                                mosaic_file.unlink()
-                                deleted_items.append(f"mosaic: {mosaic_file.name}")
-                                logger.info(f"✓ Deleted mosaic: {mosaic_file.name}")
-                    except Exception as e:
-                        logger.warning(f"Error checking mosaic {mosaic_file}: {e}")
+        # Delete associated mosaic files (match by viewport name in filename)
+        if MOSAICS_DIR.exists():
+            for mosaic_file in MOSAICS_DIR.glob('*.tif'):
+                # Check if mosaic filename starts with viewport name
+                if mosaic_file.stem.startswith(viewport_name + '_'):
+                    mosaic_file.unlink()
+                    deleted_items.append(f"mosaic: {mosaic_file.name}")
+                    logger.info(f"✓ Deleted mosaic: {mosaic_file.name}")
 
         # Delete pyramid files for all types (embeddings, satellite, pca)
         pyramid_dirs_to_clean = [
