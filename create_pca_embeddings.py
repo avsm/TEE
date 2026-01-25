@@ -27,20 +27,13 @@ CHUNK_SIZE = 1000  # Process in chunks to save memory
 def compute_pca_for_year(year, viewport_id=None):
     """Compute PCA projection for a single year's embeddings."""
 
-    # Try viewport-specific filename first
+    # Use viewport-specific filename
     if viewport_id:
         input_file = MOSAICS_DIR / f"{viewport_id}_embeddings_{year}.tif"
-    else:
-        input_file = None
-
-    # Fallback to old Bangalore filename for compatibility
-    if not input_file or not input_file.exists():
-        input_file = MOSAICS_DIR / f"bangalore_{year}.tif"
-
-    if viewport_id:
         output_file = OUTPUT_DIR / f"{viewport_id}_{year}_pca.tif"
     else:
-        output_file = OUTPUT_DIR / f"bangalore_{year}_pca.tif"
+        print(f"⚠️  Skipping PCA {year}: No viewport specified")
+        return False
 
     if output_file.exists():
         print(f"✓ Skipping {year}: PCA file already exists")

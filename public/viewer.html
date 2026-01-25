@@ -596,8 +596,7 @@
 
         // Helper function to get viewport-specific localStorage key
         function getLabelsStorageKey() {
-            const viewportId = currentViewportName || 'bangalore';
-            return `${viewportId}_labels_3panel`;
+            return `${currentViewportName}_labels_3panel`;
         }
 
         // Update label count
@@ -630,14 +629,6 @@
             const storageKey = getLabelsStorageKey();
             let stored = localStorage.getItem(storageKey);
 
-            // Only fallback to old Bangalore key if current viewport is 'bangalore' (for backwards compatibility)
-            if (!stored && storageKey === 'bangalore_labels_3panel') {
-                stored = localStorage.getItem('bangalore_labels_3panel');
-                if (stored) {
-                    console.log('[BACKWARDS COMPATIBILITY] Loading labels for bangalore viewport');
-                }
-            }
-            // New viewports should start with fresh, empty labels (no fallback)
             if (stored) {
                 try {
                     const saveData = JSON.parse(stored);

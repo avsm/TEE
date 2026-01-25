@@ -264,17 +264,13 @@ def main():
 
     # Process Tessera embeddings (2017-2024)
     for year in YEARS:
-        # First try viewport-specific filename
+        # Use viewport-specific filename
         if viewport_id:
             tessera_file = MOSAICS_DIR / f"{viewport_id}_embeddings_{year}.tif"
         else:
             tessera_file = None
 
-        # Fallback to old Bangalore filename for compatibility
         if not tessera_file or not tessera_file.exists():
-            tessera_file = MOSAICS_DIR / f"bangalore_{year}.tif"
-
-        if not tessera_file.exists():
             print(f"\n⚠️  Skipping {year}: File not found")
             progress.update("processing", f"Skipped {year}: file not found", current_file=f"embeddings_{year}")
             continue
@@ -312,11 +308,7 @@ def main():
     else:
         satellite_file = None
 
-    # Fallback to old Bangalore filename for compatibility
-    if not satellite_file or not satellite_file.exists():
-        satellite_file = MOSAICS_DIR / "bangalore_satellite_rgb.tif"
-
-    if satellite_file.exists():
+    if satellite_file and satellite_file.exists():
         satellite_upscaled_file = PYRAMIDS_BASE_DIR / "temp_satellite_upscaled.tif"
         upscale_image(satellite_file, satellite_upscaled_file, upscale_factor=3)
 
@@ -343,9 +335,12 @@ def main():
     print("=" * 70)
 
     for year in YEARS:
-        pca_file = PCA_MOSAICS_DIR / f"bangalore_{year}_pca.tif"
+        if viewport_id:
+            pca_file = PCA_MOSAICS_DIR / f"{viewport_id}_{year}_pca.tif"
+        else:
+            pca_file = None
 
-        if not pca_file.exists():
+        if not pca_file or not pca_file.exists():
             print(f"\n⚠️  Skipping PCA {year}: File not found")
             continue
 
@@ -363,7 +358,7 @@ def main():
         pca_pyramids_dir.mkdir(parents=True, exist_ok=True)
 
         # Upscale PCA RGB for better resolution
-        pca_upscaled_file = pca_pyramids_dir / f"bangalore_{year}_pca_upscaled.tif"
+        pca_upscaled_file = pca_pyramids_dir / f"{viewport_id}_{year}_pca_upscaled.tif"
         upscale_image(pca_file, pca_upscaled_file, upscale_factor=3)
 
         # Create pyramids from upscaled PCA RGB
