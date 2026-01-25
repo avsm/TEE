@@ -373,42 +373,6 @@ def api_download_embeddings():
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
-@app.route('/api/downloads/satellite', methods=['POST'])
-def api_download_satellite():
-    """Download satellite RGB for the current viewport."""
-    try:
-        import subprocess
-        project_root = Path(__file__).parent.parent
-
-        # Get current viewport info
-        viewport = get_active_viewport()
-        logger.info(f"Downloading satellite RGB for viewport: {viewport['viewport_id']}")
-
-        # Run the download script
-        result = run_script('download_satellite_rgb.py', timeout=600)
-
-        if result.returncode == 0:
-            logger.info("Satellite RGB download completed successfully")
-            return jsonify({
-                'success': True,
-                'message': 'Satellite RGB downloaded successfully',
-                'viewport': viewport['viewport_id']
-            })
-        else:
-            error_msg = result.stderr or result.stdout
-            logger.error(f"Satellite RGB download failed: {error_msg}")
-            return jsonify({
-                'success': False,
-                'error': f'Download failed: {error_msg}'
-            }), 400
-
-    except subprocess.TimeoutExpired:
-        logger.error("Satellite RGB download timeout")
-        return jsonify({'success': False, 'error': 'Download timeout'}), 408
-    except Exception as e:
-        logger.error(f"Error downloading satellite RGB: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 400
-
 
 def run_download_process(task_id):
     """Background task to run downloads and processing in parallel."""
@@ -465,12 +429,11 @@ def run_download_process(task_id):
 
         # Use viewport-specific filenames for proper caching across viewports
         embeddings_mosaic = MOSAICS_DIR / f'{viewport_name}_embeddings_2024.tif'
-        satellite_mosaic = MOSAICS_DIR / f'{viewport_name}_satellite_rgb.tif'
 
         skip_downloads = False
-        if embeddings_mosaic.exists() and satellite_mosaic.exists():
+        if embeddings_mosaic.exists():
             try:
-                # Check if mosaics contain the viewport area (containment, not exact match)
+                # Check if mosaic contains the viewport area (containment, not exact match)
                 with rasterio.open(embeddings_mosaic) as src:
                     cached_bounds = src.bounds
 
@@ -483,9 +446,9 @@ def run_download_process(task_id):
                     )
 
                     if viewport_contained:
-                        logger.info(f"Mosaics already exist and contain viewport - skipping downloads, proceeding to pyramid creation")
+                        logger.info(f"Embeddings mosaic already exists and contains viewport - skipping downloads, proceeding to pyramid creation")
                         skip_downloads = True
-                        update_progress(45, "✓ Mosaics found - skipping downloads, creating pyramids...")
+                        update_progress(45, "✓ Embeddings mosaic found - skipping downloads, creating pyramids...")
             except Exception as e:
                 logger.warning(f"Could not check mosaic bounds: {e}")
 
