@@ -838,27 +838,38 @@ def api_extract_embedding():
 
 @app.route('/api/embeddings/search-similar', methods=['POST'])
 def api_search_similar_embeddings():
-    """Find all pixels similar to a query embedding using exact L2 distance.
+    """Find all pixels similar to a query embedding using L2 distance.
+
+    Embeddings are 128-dimensional float32 vectors with actual L2 distances:
+    - Min: 0.0 (exact match)
+    - Median: ~28.0 (typical distance)
+    - Max: ~45.0 (completely different)
 
     Request body:
     {
         "embedding": [128-dim array of float32 values],
-        "threshold": 5.0,
-        "viewport_id": "tile_aligned"
+        "threshold": 25.0,
+        "viewport_id": "came"
     }
+
+    Suggested thresholds:
+    - 25.0: Close matches (5th percentile - find very similar pixels)
+    - 30.0: Moderate matches (around median distance)
+    - 35.0: Loose matches (find broader similarities)
+    - 40.0: Very loose matches (almost everything)
 
     Response:
     {
         "success": true,
         "matches": [
-            {"lat": 13.0045, "lon": 77.5670, "distance": 3.456, "pixel": {"x": 100, "y": 200}},
+            {"lat": 13.0045, "lon": 77.5670, "distance": 25.234, "pixel": {"x": 100, "y": 200}},
             ...
         ],
         "query_stats": {
-            "total_pixels": 1251042,
+            "total_pixels": 3516168,
             "matches_found": 234,
             "computation_time_ms": 450,
-            "threshold": 5.0
+            "threshold": 25.0
         }
     }
     """
@@ -891,10 +902,10 @@ def api_search_similar_embeddings():
                 'error': f'Invalid embedding dimension: {query_embedding.size}, expected 128'
             }), 400
 
-        if not (0.0 <= threshold <= 15.0):
+        if not (0.0 <= threshold <= 50.0):
             return jsonify({
                 'success': False,
-                'error': f'Invalid threshold: {threshold}, must be between 0.0 and 15.0'
+                'error': f'Invalid threshold: {threshold}, must be between 0.0 and 50.0'
             }), 400
 
         logger.info(f"[SEARCH] Query: threshold={threshold}, viewport={viewport_id}")

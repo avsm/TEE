@@ -1250,10 +1250,11 @@
         function updateThresholdDisplay() {
             const slider = document.getElementById('similarity-threshold');
             const display = document.getElementById('threshold-display');
-            // Map slider 0-100 to threshold 0.0-15.0 (for float32 embeddings in native range)
-            // Embeddings are float32 with range ~[-13.64, 17.22], so L2 distances naturally range from 0-15+
-            // This gives: 0%=exact match, 33%=moderate similarity (~5.0), 67%=relaxed (~10.0), 100%=very broad (~15.0)
-            const value = (parseInt(slider.value) / 100) * 15.0;
+            // Map slider 0-100 to threshold 0.0-40.0 (for float32 embeddings in native range)
+            // Embeddings are 128D float32 with range ~[-12.6, 16.0]
+            // Actual L2 distances: min=0, median=28, mean=27.36, max~=45
+            // Threshold mapping: 0%=exact, 50%=median distance (~20), 100%=very broad (~40)
+            const value = (parseInt(slider.value) / 100) * 40.0;
             display.textContent = value.toFixed(2);
         }
 
