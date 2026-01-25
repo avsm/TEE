@@ -61,21 +61,23 @@ def download_embeddings():
 
     for year in YEARS:
         print(f"\n📅 Processing year {year}...")
-        progress.update("processing", f"Processing year {year}...", current_file=f"embeddings_{year}")
 
         # Use viewport-specific filename for proper caching across viewports
         output_file = MOSAICS_DIR / f"{viewport_id}_embeddings_{year}.tif"
+
+        print(f"   Target file: {output_file.name}")
+        progress.update("processing", f"Processing year {year}...", current_file=output_file.name)
 
         # Check cache for matching bounds
         cached_file = check_cache(BBOX, 'embeddings')
         if cached_file:
             print(f"   ✓ Cache hit! Using existing mosaic: {cached_file}")
-            progress.update("processing", f"Using cached embeddings for {year}", current_file=f"embeddings_{year}")
+            progress.update("processing", f"Using cached embeddings for {year}", current_file=output_file.name)
             continue
 
         if output_file.exists():
             print(f"   ✓ Mosaic already exists: {output_file}")
-            progress.update("processing", f"Using existing mosaic for {year}", current_file=f"embeddings_{year}")
+            progress.update("processing", f"Using existing mosaic for {year}", current_file=output_file.name)
             continue
 
         # Retry logic for download and validation
@@ -83,7 +85,7 @@ def download_embeddings():
         for attempt in range(1, max_retries + 1):
             try:
                 print(f"   Downloading and merging tiles (attempt {attempt}/{max_retries})...")
-                progress.update("downloading", f"Downloading embeddings for {year} (attempt {attempt}/{max_retries})...", current_file=f"embeddings_{year}")
+                progress.update("downloading", f"Downloading {output_file.name} (attempt {attempt}/{max_retries})...", current_file=output_file.name)
 
                 # Fetch mosaic for the region (auto-downloads missing tiles)
                 mosaic_array, mosaic_transform, crs = tessera.fetch_mosaic_for_region(
@@ -95,7 +97,7 @@ def download_embeddings():
 
                 print(f"   ✓ Downloaded. Mosaic shape: {mosaic_array.shape}")
                 print(f"   Saving to GeoTIFF: {output_file}")
-                progress.update("saving", f"Saving embeddings to disk...", current_file=f"embeddings_{year}")
+                progress.update("saving", f"Saving {output_file.name} to disk...", current_file=output_file.name)
 
                 # Save mosaic to GeoTIFF
                 height, width, bands = mosaic_array.shape
@@ -127,7 +129,7 @@ def download_embeddings():
                     print(f"   ✗ File validation failed: {val_error}")
                     output_file.unlink()  # Delete corrupted file
                     if attempt < max_retries:
-                        progress.update("processing", f"File corrupted, retrying (attempt {attempt+1}/{max_retries})...", current_file=f"embeddings_{year}")
+                        progress.update("processing", f"File corrupted, retrying (attempt {attempt+1}/{max_retries})...", current_file=output_file.name)
                         import time
                         time.sleep(5)  # Wait before retry
                         continue
@@ -144,7 +146,7 @@ def download_embeddings():
                     break
                 else:
                     print(f"   ⚠️  Attempt {attempt} failed, retrying: {e}")
-                    progress.update("processing", f"Download failed, retrying (attempt {attempt+1}/{max_retries})...", current_file=f"embeddings_{year}")
+                    progress.update("processing", f"Download failed, retrying (attempt {attempt+1}/{max_retries})...", current_file=output_file.name)
                     import time
                     time.sleep(5)  # Wait before retry
                     continue
@@ -153,7 +155,7 @@ def download_embeddings():
         if output_file.exists():
             size_mb = output_file.stat().st_size / (1024*1024)
             print(f"   ✓ Saved: {output_file} ({size_mb:.2f} MB)")
-            progress.update("processing", f"Saved {size_mb:.1f} MB", current_value=int(size_mb), current_file=f"embeddings_{year}")
+            progress.update("processing", f"Saved {output_file.name} ({size_mb:.1f} MB)", current_value=int(size_mb), current_file=output_file.name)
             viewport_mosaic_created = True
 
     print("\n" + "=" * 60)
