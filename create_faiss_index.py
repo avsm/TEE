@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(Path(__file__).parent))
 
 from lib.viewport_utils import get_active_viewport
+from lib.progress_tracker import ProgressTracker
 
 # Configuration
 DATA_DIR = Path.home() / "blore_data"
@@ -67,6 +68,10 @@ def create_faiss_index():
     except Exception as e:
         logger.error(f"Failed to read viewport: {e}")
         sys.exit(1)
+
+    # Initialize progress tracker
+    progress = ProgressTracker(f"{viewport_id}_faiss")
+    progress.update("starting", f"Initializing FAISS index creation for {viewport_id}...")
 
     # Find mosaic file (viewport-specific)
     mosaic_file = MOSAICS_DIR / f"{viewport_id}_embeddings_2024.tif"
@@ -117,12 +122,14 @@ def create_faiss_index():
             # Keep as float32 (no conversion to uint8 - embeddings are already float32 in GeoTIFF)
             sampled_embeddings = np.array(sampled_embeddings, dtype=np.float32)
             logger.info(f"   ✓ Sampled {len(sampled_embeddings):,} pixels")
+            progress.update("processing", f"Sampled {len(sampled_embeddings):,} pixels", current_file="embeddings_sampled")
 
             # Use float32 embeddings directly (no normalization needed - keep native range)
             sampled_embeddings_f32 = sampled_embeddings
 
             # Create IVF-PQ index
             logger.info(f"   Creating IVF-PQ index...")
+            progress.update("processing", "Creating IVF-PQ index...", current_file="embeddings_index")
             # IVF: 1024 cells, PQ: 64 subquantizers (128/2 = 64)
             nlist = min(1024, max(100, len(sampled_embeddings) // 100))
             quantizer = faiss.IndexFlatL2(EMBEDDING_DIM)
@@ -136,6 +143,7 @@ def create_faiss_index():
             logger.info(f"   ✓ Saved FAISS index: {index_file}")
             index_size_mb = index_file.stat().st_size / (1024 * 1024)
             logger.info(f"     Index size: {index_size_mb:.1f} MB")
+            progress.update("processing", f"Created index ({index_size_mb:.1f} MB)", current_file="embeddings_index")
 
             # Step 2: Read ALL embeddings for threshold-based search
             logger.info(f"\n💾 Step 2: Storing all pixel embeddings...")
@@ -149,6 +157,11 @@ def create_faiss_index():
             for y_start in range(0, height, chunk_size):
                 y_end = min(y_start + chunk_size, height)
                 logger.info(f"   Processing rows {y_start}-{y_end}...")
+
+                # Update progress
+                percent = min(100, int((y_start / height) * 100))
+                progress.update("processing", f"Loading embeddings ({percent}%)...",
+                              current_value=y_start, total_value=height, current_file="all_embeddings")
 
                 # Read all bands for this chunk
                 from rasterio import windows as rasterio_windows
@@ -216,6 +229,7 @@ def create_faiss_index():
         logger.error(f"Error creating FAISS index: {e}")
         import traceback
         traceback.print_exc()
+        progress.error(f"FAISS creation failed: {e}")
         sys.exit(1)
 
     # Summary
@@ -231,6 +245,9 @@ def create_faiss_index():
                   metadata_file.stat().st_size / (1024 * 1024))
     logger.info(f"\nTotal size: {total_size:.1f} MB")
     logger.info("=" * 70)
+
+    # Update progress to complete
+    progress.complete(f"Created FAISS index: {total_size:.1f} MB total")
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ import geotessera as gt
 sys.path.insert(0, str(Path(__file__).parent))
 
 from lib.viewport_utils import get_active_viewport, check_cache
+from lib.progress_tracker import ProgressTracker
 
 # Configuration
 YEARS = range(2024, 2025)  # 2024 only for faster download
@@ -36,6 +37,10 @@ def download_embeddings():
         print(f"ERROR: Failed to read viewport: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Initialize progress tracker
+    progress = ProgressTracker(f"{viewport_id}_embeddings")
+    progress.update("starting", f"Initializing download for {viewport_id}...")
+
     # Create output directories
     EMBEDDINGS_DIR.mkdir(exist_ok=True)
     MOSAICS_DIR.mkdir(exist_ok=True)
@@ -53,6 +58,8 @@ def download_embeddings():
 
     for year in YEARS:
         print(f"\n📅 Processing year {year}...")
+        progress.update("processing", f"Processing year {year}...", current_file=f"embeddings_{year}")
+
         # Use viewport-specific filename for proper caching across viewports
         output_file = MOSAICS_DIR / f"{viewport_id}_embeddings_{year}.tif"
 
@@ -60,14 +67,17 @@ def download_embeddings():
         cached_file = check_cache(BBOX, 'embeddings')
         if cached_file:
             print(f"   ✓ Cache hit! Using existing mosaic: {cached_file}")
+            progress.update("processing", f"Using cached embeddings for {year}", current_file=f"embeddings_{year}")
             continue
 
         if output_file.exists():
             print(f"   ✓ Mosaic already exists: {output_file}")
+            progress.update("processing", f"Using existing mosaic for {year}", current_file=f"embeddings_{year}")
             continue
 
         try:
             print(f"   Downloading and merging tiles...")
+            progress.update("downloading", f"Downloading embeddings for {year}...", current_file=f"embeddings_{year}")
 
             # Fetch mosaic for the region (auto-downloads missing tiles)
             mosaic_array, mosaic_transform, crs = tessera.fetch_mosaic_for_region(
@@ -79,6 +89,7 @@ def download_embeddings():
 
             print(f"   ✓ Downloaded. Mosaic shape: {mosaic_array.shape}")
             print(f"   Saving to GeoTIFF: {output_file}")
+            progress.update("saving", f"Saving embeddings to disk...", current_file=f"embeddings_{year}")
 
             # Save mosaic to GeoTIFF
             height, width, bands = mosaic_array.shape
@@ -101,11 +112,13 @@ def download_embeddings():
 
             size_mb = output_file.stat().st_size / (1024*1024)
             print(f"   ✓ Saved: {output_file} ({size_mb:.2f} MB)")
+            progress.update("processing", f"Saved {size_mb:.1f} MB", current_value=int(size_mb), current_file=f"embeddings_{year}")
 
         except Exception as e:
             print(f"   ✗ Error processing {year}: {e}")
             import traceback
             traceback.print_exc()
+            progress.error(f"Error downloading embeddings for {year}: {e}")
             continue
 
     print("\n" + "=" * 60)
@@ -123,8 +136,10 @@ def download_embeddings():
             total_size += size_mb
             print(f"  - {f.name} ({size_mb:.2f} MB)")
         print(f"\nTotal size: {total_size:.2f} MB")
+        progress.complete(f"Downloaded {total_size:.1f} MB of embeddings")
     else:
         print("\n⚠️  No mosaics were created.")
+        progress.complete("No new mosaics downloaded (already cached)")
 
 if __name__ == "__main__":
     download_embeddings()

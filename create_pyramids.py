@@ -27,6 +27,10 @@ from rasterio.enums import Resampling
 from pathlib import Path
 from PIL import Image
 
+# Add parent directory to path for lib imports
+sys.path.insert(0, str(Path(__file__).parent))
+from lib.progress_tracker import ProgressTracker
+
 # Configuration
 DATA_DIR = Path.home() / "blore_data"
 MOSAICS_DIR = DATA_DIR / "mosaics"
@@ -238,7 +242,6 @@ def create_pyramids_for_image(source_file, output_dir, name, upscale_factor=1):
 def main():
     """Main function to create all pyramids."""
     # Import here to avoid issues if viewport file doesn't exist
-    sys.path.insert(0, str(Path(__file__).parent))
     try:
         from lib.viewport_utils import get_active_viewport
         viewport = get_active_viewport()
@@ -247,6 +250,10 @@ def main():
         print(f"Warning: Could not read active viewport: {e}")
         print("Processing any available mosaic files...")
         viewport_id = None
+
+    # Initialize progress tracker
+    progress = ProgressTracker(f"{viewport_id}_pyramids" if viewport_id else "pyramids")
+    progress.update("starting", "Initializing pyramid creation...")
 
     print("=" * 70)
     print("Creating Image Pyramids for Tessera Embeddings and Satellite RGB")
@@ -270,9 +277,12 @@ def main():
 
         if not tessera_file.exists():
             print(f"\n⚠️  Skipping {year}: File not found")
+            progress.update("processing", f"Skipped {year}: file not found", current_file=f"embeddings_{year}")
             continue
 
         print(f"\nProcessing {tessera_file.name}...")
+        progress.update("processing", f"Creating pyramids for {year}...", current_file=f"embeddings_{year}")
+
         # First, create RGB from first 3 bands (upscale 3x for maximum resolution when zoomed in)
         rgb_temp_file = PYRAMIDS_DIR / f"temp_rgb_{year}.tif"
         rgb_file = create_rgb_from_tessera(tessera_file, rgb_temp_file, upscale_factor=3)
@@ -280,6 +290,7 @@ def main():
         # Create pyramids from native resolution RGB
         year_dir = PYRAMIDS_DIR / str(year)
         create_pyramids_for_image(rgb_file, year_dir, f"Tessera {year}", upscale_factor=1)
+        progress.update("processing", f"Created pyramid levels for {year}", current_file=f"embeddings_{year}", current_value=year-2023)
 
         # Clean up temp file
         rgb_temp_file.unlink()
@@ -349,6 +360,9 @@ def main():
     print(f"\nTessera pyramid size: {total_mb:.1f} MB")
     print(f"PCA pyramid size: {pca_total_mb:.1f} MB")
     print(f"Total: {(total_mb + pca_total_mb):.1f} MB")
+
+    # Update progress to complete
+    progress.complete(f"Created pyramids: {total_mb:.1f} MB Tessera + {pca_total_mb:.1f} MB PCA")
 
 
 if __name__ == "__main__":

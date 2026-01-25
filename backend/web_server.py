@@ -714,6 +714,32 @@ def api_downloads_progress(task_id):
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
+@app.route('/api/operations/progress/<operation_id>', methods=['GET'])
+def api_operations_progress(operation_id):
+    """Get progress of an operation (embeddings, pyramids, FAISS) from progress JSON file."""
+    try:
+        progress_file = Path(f"/tmp/{operation_id}_progress.json")
+
+        if not progress_file.exists():
+            return jsonify({
+                'success': False,
+                'status': 'not_started',
+                'message': 'Operation not started yet'
+            }), 200
+
+        with open(progress_file, 'r') as f:
+            progress_data = json.load(f)
+
+        return jsonify({
+            'success': True,
+            **progress_data
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting operation progress: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
 @app.route('/api/viewports/delete', methods=['POST'])
 def api_delete_viewport():
     """Delete a viewport and all associated data."""
