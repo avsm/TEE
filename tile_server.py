@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tile server for Tessera embeddings
+Tile server for TESSERA embeddings and PCA projections
 Serves map tiles dynamically from pyramid GeoTIFFs for current viewport
 """
 
@@ -18,7 +18,7 @@ CORS(app)
 
 DATA_DIR = Path.home() / "blore_data"
 PYRAMIDS_BASE_DIR = DATA_DIR / "pyramids"
-YEARS = [str(y) for y in range(2017, 2025)] + ['satellite']
+YEARS = [str(y) for y in range(2024, 2025)]  # 2024 only
 
 # Cache for tile readers
 readers = {}
@@ -36,9 +36,7 @@ def get_reader(viewport, map_id, zoom_level):
     if key not in readers:
         viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport
 
-        if map_id == 'satellite':
-            tif_path = viewport_pyramids_dir / 'satellite' / f'level_{pyramid_level}.tif'
-        elif map_id == 'pca':
+        if map_id == 'pca':
             tif_path = viewport_pyramids_dir / 'pca' / '2024' / f'level_{pyramid_level}.tif'
         else:
             # map_id is a year like '2024'
@@ -139,9 +137,7 @@ def get_bounds(viewport, map_id):
     try:
         viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport
 
-        if map_id == 'satellite':
-            tif_path = viewport_pyramids_dir / 'satellite' / 'level_0.tif'
-        elif map_id == 'pca':
+        if map_id == 'pca':
             tif_path = viewport_pyramids_dir / 'pca' / '2024' / 'level_0.tif'
         else:
             # map_id is a year like '2024'
@@ -172,16 +168,11 @@ def health():
                 viewport_name = viewport_dir.name
                 available_maps = []
 
-                # Check for year directories (2017-2024)
+                # Check for year directories (2024 only)
                 for year in YEARS:
-                    if year != 'satellite':
-                        year_dir = viewport_dir / year / 'level_0.tif'
-                        if year_dir.exists():
-                            available_maps.append(year)
-
-                # Check for satellite
-                if (viewport_dir / 'satellite' / 'level_0.tif').exists():
-                    available_maps.append('satellite')
+                    year_dir = viewport_dir / year / 'level_0.tif'
+                    if year_dir.exists():
+                        available_maps.append(year)
 
                 # Check for PCA
                 if (viewport_dir / 'pca' / '2024' / 'level_0.tif').exists():
@@ -202,6 +193,6 @@ if __name__ == '__main__':
     print("  - http://localhost:5125/tiles/<viewport>/<map_id>/<z>/<x>/<y>.png")
     print("  - http://localhost:5125/bounds/<viewport>/<map_id>")
     print("  - http://localhost:5125/health")
-    print("\nMap IDs: 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, satellite, pca")
+    print("\nMap IDs: 2024 (embeddings), pca (PCA projection)")
     print("\nStarting server on http://localhost:5125")
     app.run(debug=True, port=5125, threaded=True)

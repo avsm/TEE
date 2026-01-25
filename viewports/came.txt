@@ -1,0 +1,20 @@
+Viewport Configuration
+=====================
+
+Viewport ID: came
+
+Center (degrees):
+  Latitude:  52.2156°
+  Longitude: 0.1126°
+
+Bounds (degrees):
+  Min Latitude:  52.1931°
+  Max Latitude:  52.2381°
+  Min Longitude: 0.0760°
+  Max Longitude: 0.1493°
+
+Size: 5km × 5km
+
+Description: 5km × 5km
+
+Generated: 2026-01-25T11:23:23.953419

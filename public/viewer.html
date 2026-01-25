@@ -330,10 +330,6 @@
                 <div id="coords-text">Lat: 0.000000 | Lon: 0.000000</div>
             </div>
         </div>
-        <div class="panel">
-            <div class="panel-header">Satellite RGB</div>
-            <div id="map-rgb" class="map"></div>
-        </div>
     </div>
 
     <div id="status">
@@ -371,15 +367,13 @@
         // Storage for labels: {panel: [[lat, lon, label], ...]}
         let labels = {
             'osm': [],
-            'embedding': [],
-            'rgb': []
+            'embedding': []
         };
 
         // Storage for marker objects: {panel: {key: marker}}
         let markers = {
             'osm': {},
-            'embedding': {},
-            'rgb': {}
+            'embedding': {}
         };
 
         // Map instances
@@ -397,7 +391,7 @@
 
                     // Update page title and heading with viewport name
                     const viewportDisplayName = currentViewportName.charAt(0).toUpperCase() + currentViewportName.slice(1);
-                    document.title = `${viewportDisplayName} Viewer - OSM | Embeddings | RGB`;
+                    document.title = `${viewportDisplayName} Viewer - OSM | Embeddings`;
                     const titleEl = document.getElementById('viewer-title');
                     if (titleEl) {
                         titleEl.textContent = `${viewportDisplayName} Viewer`;
@@ -474,28 +468,6 @@
                 console.log(`[MAPS] Embedding map clipped to viewport bounds: ${JSON.stringify(viewportBounds)}`);
             }
 
-            // RGB Satellite Map
-            maps.rgb = L.map('map-rgb', {
-                center: center,
-                zoom: zoom,
-                zoomControl: true,
-                minZoom: 6,
-                maxZoom: 17
-            });
-
-            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Esri World Imagery',
-                opacity: 1.0,
-                maxZoom: 18,
-                minZoom: 6
-            }).addTo(maps.rgb);
-
-            // Clip RGB satellite map to viewport bounds
-            if (viewportBounds) {
-                maps.rgb.setMaxBounds(viewportBounds);
-                maps.rgb.options.maxBoundsViscosity = 1.0;  // Prevent bouncing when hitting edges
-                console.log(`[MAPS] RGB satellite map clipped to viewport bounds`);
-            }
 
             // Add click handlers
             Object.keys(maps).forEach(panel => {
@@ -512,11 +484,6 @@
                     if (panel === 'embedding' && labelingMode) {
                         console.log('[CLICK] Routing to embeddings labeling handler');
                         extractAndLabelEmbedding(e.latlng.lat, e.latlng.lng);
-                    } else if (panel === 'rgb') {
-                        // Old behavior: add marker only for RGB panel
-                        console.log(`[CLICK] Routing to marker handler for RGB panel`);
-                        const label = document.getElementById('label-input')?.value || 'unlabeled';
-                        addMarker(panel, e.latlng.lat, e.latlng.lng, label);
                     }
                 });
             });

@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 """
-Create image pyramids (12 zoom levels) for Tessera embeddings and satellite RGB.
+Create image pyramids (6 zoom levels) for Tessera embeddings.
 
-For Tessera: Extract first 3 bands as RGB, then create pyramids
-For Satellite RGB: Create pyramids from existing RGB image
-
+Extracts first 3 bands as RGB, then creates multi-level pyramids for efficient tiling.
 Uses Lanczos resampling for high-quality downsampling to reduce blockiness.
 
 Output structure:
-pyramids/
-  ├── 2017/
+pyramids/{viewport_id}/
+  ├── 2024/
   │   ├── level_0.tif  (full resolution)
   │   ├── level_1.tif  (1/2 resolution)
   │   ├── ...
-  │   └── level_11.tif  (1/2048 resolution)
-  ├── 2018/
-  ├── ...
-  ├── 2024/
-  └── satellite/
+  │   └── level_5.tif  (1/32 resolution)
+  └── pca/
+      └── 2024/
+          ├── level_0.tif
+          └── ...
 """
 
 import sys
@@ -255,7 +253,7 @@ def main():
     progress.update("starting", "Initializing pyramid creation...")
 
     print("=" * 70)
-    print("Creating Image Pyramids for Tessera Embeddings and Satellite RGB")
+    print("Creating Image Pyramids for Tessera Embeddings")
     print("=" * 70)
     if viewport_id:
         print(f"Viewport: {viewport_id}")
@@ -303,33 +301,6 @@ def main():
         # Clean up temp file
         rgb_temp_file.unlink()
 
-    # Process satellite RGB (upscale 3x to match Tessera resolution for consistency)
-    if viewport_id:
-        satellite_file = MOSAICS_DIR / f"{viewport_id}_satellite_rgb.tif"
-    else:
-        satellite_file = None
-
-    # Fallback to old Bangalore filename for compatibility
-    if not satellite_file or not satellite_file.exists():
-        satellite_file = MOSAICS_DIR / "bangalore_satellite_rgb.tif"
-
-    if satellite_file.exists():
-        satellite_upscaled_file = PYRAMIDS_BASE_DIR / "temp_satellite_upscaled.tif"
-        upscale_image(satellite_file, satellite_upscaled_file, upscale_factor=3)
-
-        # Create viewport-specific satellite directory
-        if viewport_id:
-            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport_id
-        else:
-            # Fallback for backward compatibility if viewport can't be determined
-            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / "rethymno"
-
-        viewport_pyramids_dir.mkdir(parents=True, exist_ok=True)
-        satellite_dir = viewport_pyramids_dir / "satellite"
-        create_pyramids_for_image(satellite_upscaled_file, satellite_dir, "Satellite RGB", upscale_factor=1)
-        satellite_upscaled_file.unlink()
-    else:
-        print(f"\n⚠️  Satellite RGB file not found: {satellite_file}")
 
     # Process PCA embeddings (2017-2024)
     print("\n" + "=" * 70)
