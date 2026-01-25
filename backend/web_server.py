@@ -754,30 +754,9 @@ def api_delete_viewport():
                     deleted_items.append(f"mosaic: {mosaic_file.name}")
                     logger.info(f"✓ Deleted mosaic: {mosaic_file.name}")
 
-        # Delete pyramid files for all types (embeddings, satellite, pca)
-        pyramid_dirs_to_clean = [
-            PYRAMIDS_DIR / '2024',      # Embeddings pyramids
-            PYRAMIDS_DIR / 'satellite',  # Satellite RGB pyramids
-            PYRAMIDS_DIR / 'pca'         # PCA pyramids
-        ]
-
-        for pyramids_dir in pyramid_dirs_to_clean:
-            if pyramids_dir.exists():
-                try:
-                    # Delete all pyramid files for this viewport
-                    for pyramid_file in pyramids_dir.glob('*.tif'):
-                        pyramid_file.unlink()
-                        deleted_items.append(f"pyramid: {pyramid_file.name}")
-                        logger.info(f"✓ Deleted pyramid: {pyramid_file.name}")
-
-                    # Delete pyramid metadata if it exists
-                    pyramid_metadata = pyramids_dir / 'pyramid_metadata.json'
-                    if pyramid_metadata.exists():
-                        pyramid_metadata.unlink()
-                        deleted_items.append(f"pyramid_metadata.json ({pyramids_dir.name})")
-                        logger.info(f"✓ Deleted pyramid_metadata.json from {pyramids_dir.name}")
-                except Exception as e:
-                    logger.warning(f"Error deleting pyramid files from {pyramids_dir.name}: {e}")
+        # Note: Pyramid files are NOT deleted because they are shared resources
+        # generated from the active viewport's embeddings. They will be regenerated
+        # if the user switches to a different viewport or back to this one later.
 
         # Delete FAISS indices directory for this viewport
         if FAISS_INDICES_DIR.exists():
