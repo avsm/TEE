@@ -699,7 +699,7 @@
             const url = URL.createObjectURL(dataBlob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `bangalore_labels_${currentEmbeddingYear}_${Date.now()}.json`;
+            link.download = `${currentViewportName}_labels_${currentEmbeddingYear}_${Date.now()}.json`;
             link.click();
             URL.revokeObjectURL(url);
             console.log('Exported labels to JSON file');

@@ -290,8 +290,11 @@ def main():
         if viewport_id:
             viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport_id
         else:
-            # Fallback for backward compatibility if viewport can't be determined
-            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / "rethymno"
+            # Fallback: derive viewport name from mosaic filename
+            mosaic_stem = tessera_file.stem  # e.g., "bangalore_embeddings_2024" -> "bangalore"
+            fallback_name = mosaic_stem.split('_embeddings')[0] if '_embeddings' in mosaic_stem else mosaic_stem
+            print(f"⚠️  Warning: Could not determine viewport, using derived name: {fallback_name}")
+            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / fallback_name
 
         viewport_pyramids_dir.mkdir(parents=True, exist_ok=True)
 
@@ -321,8 +324,11 @@ def main():
         if viewport_id:
             viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport_id
         else:
-            # Fallback for backward compatibility if viewport can't be determined
-            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / "rethymno"
+            # Fallback: derive viewport name from satellite filename
+            sat_stem = satellite_file.stem  # e.g., "bangalore_satellite_rgb" -> "bangalore"
+            fallback_name = sat_stem.split('_satellite')[0] if '_satellite' in sat_stem else sat_stem
+            print(f"⚠️  Warning: Could not determine viewport for satellite, using: {fallback_name}")
+            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / fallback_name
 
         viewport_pyramids_dir.mkdir(parents=True, exist_ok=True)
         satellite_dir = viewport_pyramids_dir / "satellite"
@@ -347,8 +353,11 @@ def main():
         if viewport_id:
             viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport_id
         else:
-            # Fallback for backward compatibility if viewport can't be determined
-            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / "rethymno"
+            # Fallback: derive viewport name from PCA filename
+            pca_stem = pca_file.stem  # e.g., "bangalore_2024_pca" -> "bangalore"
+            fallback_name = pca_stem.split('_')[0] if '_' in pca_stem else pca_stem
+            print(f"⚠️  Warning: Could not determine viewport for PCA, using: {fallback_name}")
+            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / fallback_name
 
         pca_pyramids_dir = viewport_pyramids_dir / "pca"
         pca_pyramids_dir.mkdir(parents=True, exist_ok=True)
@@ -372,9 +381,18 @@ def main():
     if viewport_id:
         viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport_id
     else:
-        viewport_pyramids_dir = PYRAMIDS_BASE_DIR / "rethymno"
+        # Find the most recently created viewport directory
+        if PYRAMIDS_BASE_DIR.exists():
+            subdirs = [d for d in PYRAMIDS_BASE_DIR.iterdir() if d.is_dir()]
+            if subdirs:
+                viewport_pyramids_dir = max(subdirs, key=lambda p: p.stat().st_mtime)
+                print(f"⚠️  Using most recent viewport directory: {viewport_pyramids_dir.name}")
+            else:
+                viewport_pyramids_dir = None
+        else:
+            viewport_pyramids_dir = None
 
-    if viewport_pyramids_dir.exists():
+    if viewport_pyramids_dir and viewport_pyramids_dir.exists():
         print(f"  - {viewport_pyramids_dir.absolute()}")
 
         # Summary of years created for this viewport
@@ -393,9 +411,13 @@ def main():
         print(f"\nViewport pyramid size: {total_mb:.1f} MB")
 
         # Update progress to complete
-        progress.complete(f"Created pyramids: {total_mb:.1f} MB for {viewport_id or 'rethymno'}")
+        pyramid_dest = viewport_id or viewport_pyramids_dir.name if viewport_pyramids_dir else "unknown"
+        progress.complete(f"Created pyramids: {total_mb:.1f} MB for {pyramid_dest}")
     else:
-        print(f"  - {viewport_pyramids_dir.absolute()} (not created)")
+        if viewport_pyramids_dir:
+            print(f"  - {viewport_pyramids_dir.absolute()} (not created)")
+        else:
+            print(f"  - (no viewport directory determined)")
         progress.complete("Pyramid generation complete (no viewports found)")
 
 
