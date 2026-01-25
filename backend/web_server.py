@@ -493,8 +493,8 @@ def run_download_process(task_id):
         if not skip_downloads:
             update_progress(5, "Downloading TESSERA embeddings...")
 
-            # Run both downloads in parallel
-            executor = ThreadPoolExecutor(max_workers=2)
+            # Run embeddings download
+            executor = ThreadPoolExecutor(max_workers=1)
 
             def download_embeddings():
                 try:
@@ -508,29 +508,15 @@ def run_download_process(task_id):
                     update_progress(30, "✗ Embeddings download failed")
                     return False
 
-            def download_satellite():
-                try:
-                    update_progress(10, "Downloading satellite_rgb.tif...")
-                    result = run_script('download_satellite_rgb.py', timeout=600)
-                    if result.returncode == 0:
-                        update_progress(30, "✓ Satellite RGB downloaded")
-                    return result.returncode == 0
-                except Exception as e:
-                    logger.error(f"Satellite download error: {e}")
-                    update_progress(30, "✗ Satellite RGB download failed")
-                    return False
-
-            # Submit both downloads
-            update_progress(10, "Starting parallel downloads...")
+            # Submit embeddings download only (satellite data not needed)
+            update_progress(10, "Starting embeddings download...")
             embeddings_future = executor.submit(download_embeddings)
-            satellite_future = executor.submit(download_satellite)
 
-            # Wait for both to complete
+            # Wait for embeddings to complete
             embeddings_ok = embeddings_future.result()
-            satellite_ok = satellite_future.result()
 
-            if not (embeddings_ok and satellite_ok):
-                raise Exception("One or more downloads failed")
+            if not embeddings_ok:
+                raise Exception("Embeddings download failed")
             update_progress(50, "Downloads complete. Creating pyramids...")
 
         # Run pyramid creation and FAISS index creation in parallel
