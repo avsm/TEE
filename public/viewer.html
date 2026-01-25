@@ -326,7 +326,7 @@
         <div class="panel">
             <div class="panel-header">Tessera Embeddings <span id="embedding-year">2024</span></div>
             <div id="map-embedding" class="map"></div>
-            <div id="coords-display" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: #00ff00; padding: 15px 20px; border-radius: 6px; font-family: monospace; font-size: 14px; font-weight: bold; pointer-events: none; display: none; z-index: 500; text-align: center; border: 2px solid #00ff00; box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);">
+            <div id="coords-display" style="position: absolute; bottom: 10px; left: 10px; background: rgba(0, 0, 0, 0.8); color: #00ff00; padding: 10px 15px; border-radius: 4px; font-family: monospace; font-size: 12px; font-weight: bold; pointer-events: none; display: none; z-index: 500; border: 1px solid #00ff00;">
                 <div id="coords-text">Lat: 0.000000 | Lon: 0.000000</div>
             </div>
         </div>
@@ -1061,7 +1061,7 @@
             console.log(`[DELETE] Deleted labeled pixel at key "${key}"`);
         }
 
-        // Highlight labeled pixel on embedding map as rectangle with zoom-responsive circle
+        // Highlight labeled pixel on embedding map as rectangle
         function highlightLabeledPixel(lat, lon, label, key) {
             const labelColor = getColorForLabel(label);
             const bounds = calculatePixelBounds(lat, lon);
@@ -1076,36 +1076,9 @@
                 className: 'labeled-pixel'
             }).addTo(maps.embedding);
 
-            // Add a zoom-responsive circle around the pixel for visibility at all zoom levels
-            const circle = L.circle([lat, lon], {
-                radius: 40,  // 40 meters - visible even when zoomed out
-                color: labelColor,
-                weight: 2,
-                opacity: 0.7,
-                fill: true,
-                fillColor: labelColor,
-                fillOpacity: 0.3,
-                className: 'labeled-pixel-circle'
-            }).addTo(maps.embedding);
-
-            // Update circle visibility based on zoom level
-            function updateCircleVisibility() {
-                const zoom = maps.embedding.getZoom();
-                // Show circle when zoomed out (zoom < 14), hide when zoomed in
-                circle.setStyle({
-                    opacity: zoom < 14 ? 0.7 : 0,
-                    fillOpacity: zoom < 14 ? 0.3 : 0
-                });
-            }
-
-            // Update on zoom change
-            maps.embedding.on('zoomend', updateCircleVisibility);
-            updateCircleVisibility();  // Initial check
-
             // Show label on hover
             const popupContent = `<div style="font-weight: 600; color: ${labelColor}; font-size: 12px;">${label}</div>`;
             rectangle.bindPopup(popupContent);
-            circle.bindPopup(popupContent);
 
             rectangle.on('mouseover', function() {
                 this.openPopup();
@@ -1116,20 +1089,8 @@
                 this.setStyle({fillOpacity: 0.8, weight: 1});  // Reset
             });
 
-            circle.on('mouseover', function() {
-                this.openPopup();
-                this.setStyle({fillOpacity: 0.6, weight: 3});  // Brighten on hover
-            });
-            circle.on('mouseout', function() {
-                this.closePopup();
-                updateCircleVisibility();  // Reset to zoom-dependent visibility
-            });
-
-            // Click to delete (on either shape)
+            // Click to delete
             rectangle.on('click', function() {
-                deleteLabeledPixel(key, labelPixels[key]);
-            });
-            circle.on('click', function() {
                 deleteLabeledPixel(key, labelPixels[key]);
             });
 
