@@ -1,8 +1,8 @@
 #!/bin/bash
 ##
-# Restart the Blore Viewport Manager Web Server
+# Restart Blore Services (Web Server + Tile Server)
 #
-# Cleanly shuts down any existing web servers and starts a fresh one.
+# Cleanly shuts down any existing services and starts fresh instances.
 ##
 
 set -e
@@ -10,45 +10,71 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "🛑 Shutting down existing web servers..."
+echo "🛑 Shutting down existing services..."
 
-# Kill any Python processes running the web server
+# Kill any Python processes running the servers
 pkill -f "python.*backend/web_server.py" || true
+pkill -f "python.*tile_server.py" || true
 
-# Kill any processes using port 8001
+# Kill any processes using ports 8001 and 5125
 lsof -ti:8001 | xargs kill -9 2>/dev/null || true
+lsof -ti:5125 | xargs kill -9 2>/dev/null || true
 
 # Give it a moment to clean up
 sleep 1
 
-echo "✓ Existing servers shut down"
+echo "✓ Existing services shut down"
 echo ""
-echo "🚀 Starting Blore Viewport Manager Web Server..."
+echo "🚀 Starting Blore Services..."
 echo ""
 
 # Start the web server
-python3 backend/web_server.py &
-
-# Store the PID
+echo "  → Web server on port 8001"
+python3 backend/web_server.py > /tmp/web_server.log 2>&1 &
 WEB_SERVER_PID=$!
 
-# Wait a moment for it to start
+# Start the tile server
+echo "  → Tile server on port 5125"
+python3 tile_server.py > /tmp/tile_server.log 2>&1 &
+TILE_SERVER_PID=$!
+
+# Wait a moment for them to start
 sleep 2
 
-# Check if it's still running
-if ps -p $WEB_SERVER_PID > /dev/null; then
-    echo ""
-    echo "✅ Web server started successfully (PID: $WEB_SERVER_PID)"
-    echo ""
-    echo "📍 Access the interface at: http://localhost:8001"
-    echo "📝 Press Ctrl+C to stop the server"
-    echo ""
+echo ""
+echo "Checking services..."
 
-    # Keep the script running with the web server
-    wait $WEB_SERVER_PID
+# Check if web server is still running
+if ps -p $WEB_SERVER_PID > /dev/null; then
+    echo "✅ Web server started (PID: $WEB_SERVER_PID)"
 else
-    echo ""
     echo "❌ Failed to start web server"
-    echo "Check the error output above for details"
+    tail -20 /tmp/web_server.log
     exit 1
 fi
+
+# Check if tile server is still running
+if ps -p $TILE_SERVER_PID > /dev/null; then
+    echo "✅ Tile server started (PID: $TILE_SERVER_PID)"
+else
+    echo "❌ Failed to start tile server"
+    tail -20 /tmp/tile_server.log
+    exit 1
+fi
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ All services started successfully!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "📍 Access the interface at: http://localhost:8001"
+echo ""
+echo "Logs:"
+echo "  Web server:  tail -f /tmp/web_server.log"
+echo "  Tile server: tail -f /tmp/tile_server.log"
+echo ""
+echo "📝 Press Ctrl+C to stop the servers"
+echo ""
+
+# Keep the script running (both servers run in background)
+wait
