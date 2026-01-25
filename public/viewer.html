@@ -630,13 +630,14 @@
             const storageKey = getLabelsStorageKey();
             let stored = localStorage.getItem(storageKey);
 
-            // Fallback to old Bangalore key for backwards compatibility
-            if (!stored && storageKey !== 'bangalore_labels_3panel') {
+            // Only fallback to old Bangalore key if current viewport is 'bangalore' (for backwards compatibility)
+            if (!stored && storageKey === 'bangalore_labels_3panel') {
                 stored = localStorage.getItem('bangalore_labels_3panel');
                 if (stored) {
-                    console.log('[BACKWARDS COMPATIBILITY] Found old Bangalore labels, will save to new viewport-specific key');
+                    console.log('[BACKWARDS COMPATIBILITY] Loading labels for bangalore viewport');
                 }
             }
+            // New viewports should start with fresh, empty labels (no fallback)
             if (stored) {
                 try {
                     const saveData = JSON.parse(stored);
