@@ -1152,38 +1152,50 @@ def api_relabel_by_similarity():
         relabeled = []
         unchanged = 0
 
-        for key, pixel_data in labeled_pixels.items():
-            current_label = pixel_data['label']
-            # Keep as float32 - embeddings are already in their native range, not uint8
-            pixel_emb_f32 = np.array(pixel_data['embedding'], dtype=np.float32)
+        # Vectorized computation: convert all pixel embeddings and label averages to arrays
+        pixel_keys = list(labeled_pixels.keys())
+        pixel_embeddings = np.array([labeled_pixels[k]['embedding'] for k in pixel_keys], dtype=np.float32)
 
-            # Calculate L2 distance to each label's average
-            distances = {}
-            for label, label_avg in label_avgs.items():
-                label_avg_f32 = label_avg.astype(np.float32)
-                diff = pixel_emb_f32 - label_avg_f32
-                distance = float(np.sqrt(np.sum(diff ** 2)))
-                distances[label] = distance
+        # Convert label averages to a dict with float32 arrays
+        label_avgs_f32 = {label: avg.astype(np.float32) for label, avg in label_avgs.items()}
 
-            # Find closest label
-            new_label = min(distances, key=distances.get)
-            old_distance = distances[current_label]
-            new_distance = distances[new_label]
+        # Process pixels in batches
+        batch_size = 1000
+        for batch_start in range(0, len(pixel_keys), batch_size):
+            batch_end = min(batch_start + batch_size, len(pixel_keys))
+            batch_keys = pixel_keys[batch_start:batch_end]
+            batch_embeddings = pixel_embeddings[batch_start:batch_end]
 
-            # Check if label changed
-            if new_label != current_label:
-                relabeled.append({
-                    'key': key,
-                    'old_label': current_label,
-                    'new_label': new_label,
-                    'old_distance': round(old_distance, 4),
-                    'new_distance': round(new_distance, 4),
-                    'lat': pixel_data['lat'],
-                    'lon': pixel_data['lon']
-                })
-                logger.info(f"[RELABEL]   {key}: {current_label} ({old_distance:.4f}) → {new_label} ({new_distance:.4f})")
-            else:
-                unchanged += 1
+            for i, key in enumerate(batch_keys):
+                pixel_data = labeled_pixels[key]
+                current_label = pixel_data['label']
+                pixel_emb = batch_embeddings[i]
+
+                # Calculate L2 distance to each label's average
+                distances = {}
+                for label, label_avg_f32 in label_avgs_f32.items():
+                    diff = pixel_emb - label_avg_f32
+                    distance = float(np.sqrt(np.sum(diff ** 2)))
+                    distances[label] = distance
+
+                # Find closest label
+                new_label = min(distances, key=distances.get)
+                old_distance = distances[current_label]
+                new_distance = distances[new_label]
+
+                # Check if label changed
+                if new_label != current_label:
+                    relabeled.append({
+                        'key': key,
+                        'old_label': current_label,
+                        'new_label': new_label,
+                        'old_distance': round(old_distance, 4),
+                        'new_distance': round(new_distance, 4),
+                        'lat': pixel_data['lat'],
+                        'lon': pixel_data['lon']
+                    })
+                else:
+                    unchanged += 1
 
         logger.info(f"[RELABEL] ✓ Complete! {len(relabeled)} relabeled, {unchanged} unchanged")
 
