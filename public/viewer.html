@@ -1522,6 +1522,12 @@
 
                 // Step 2: Visualize newly committed similar pixels with solid styling
                 const newlyCommitted = [];
+                const similarPixelsCount = Object.keys(similarPixels).length;
+
+                // Only visualize if operation is small enough (< 100 pixels)
+                // For large operations, just update data structure to avoid freezing
+                const shouldVisualize = similarPixelsCount < 100;
+
                 for (const [key, pixelData] of Object.entries(similarPixels)) {
                     const lat = pixelData.coordinate.lat;
                     const lon = pixelData.coordinate.lon;
@@ -1538,12 +1544,18 @@
                         maps.embedding.removeLayer(pixelData.rectangle);
                     }
 
-                    // Re-visualize with committed styling
-                    highlightLabeledPixel(lat, lon, activeLabel, key);
+                    // Re-visualize with committed styling only for small operations
+                    if (shouldVisualize) {
+                        highlightLabeledPixel(lat, lon, activeLabel, key);
+                    }
                     newlyCommitted.push(key);
                 }
 
-                console.log(`[SIMILARITY] ✓ Visualized ${newlyCommitted.length} newly committed pixels`);
+                if (shouldVisualize) {
+                    console.log(`[SIMILARITY] ✓ Visualized ${newlyCommitted.length} newly committed pixels`);
+                } else {
+                    console.log(`[SIMILARITY] ✓ Added ${newlyCommitted.length} newly committed pixels (visualization skipped for large operations)`);
+                }
 
                 // Step 3: Apply intelligent relabeling
                 console.log(`[SIMILARITY] Starting intelligent relabeling...`);
@@ -1582,31 +1594,36 @@
                     if (relabelData.relabeled && relabelData.relabeled.length > 0) {
                         console.log(`[SIMILARITY] Applying ${relabelData.relabeled.length} relabelings...`);
 
+                        // Threshold: only re-visualize if relabeled count is manageable (< 100)
+                        // For large operations, just update the data structure to avoid freezing
+                        const shouldReVisualize = relabelData.relabeled.length < 100;
+
                         for (const relabel of relabelData.relabeled) {
                             const key = relabel.key;
-                            const oldLabel = relabel.old_label;
                             const newLabel = relabel.new_label;
-                            const oldDistance = relabel.old_distance;
-                            const newDistance = relabel.new_distance;
-
-                            console.log(`[RELABEL] ${key}: ${oldLabel} (${oldDistance.toFixed(4)}) → ${newLabel} (${newDistance.toFixed(4)})`);
 
                             // Update labelPixels
                             if (labelPixels[key]) {
-                                // Remove old visualization
-                                if (labelPixels[key].rectangle) {
-                                    maps.embedding.removeLayer(labelPixels[key].rectangle);
-                                }
-                                if (labelPixels[key].marker) {
-                                    maps.embedding.removeLayer(labelPixels[key].marker);
-                                }
+                                if (shouldReVisualize) {
+                                    // Remove old visualization
+                                    if (labelPixels[key].rectangle) {
+                                        maps.embedding.removeLayer(labelPixels[key].rectangle);
+                                    }
+                                    if (labelPixels[key].marker) {
+                                        maps.embedding.removeLayer(labelPixels[key].marker);
+                                    }
 
-                                // Update label and color
-                                labelPixels[key].label = newLabel;
-                                labelPixels[key].color = getColorForLabel(newLabel);
+                                    // Update label and color
+                                    labelPixels[key].label = newLabel;
+                                    labelPixels[key].color = getColorForLabel(newLabel);
 
-                                // Re-visualize with new label's color
-                                highlightLabeledPixel(relabel.lat, relabel.lon, newLabel, key);
+                                    // Re-visualize with new label's color
+                                    highlightLabeledPixel(relabel.lat, relabel.lon, newLabel, key);
+                                } else {
+                                    // For large operations, just update data structure
+                                    labelPixels[key].label = newLabel;
+                                    labelPixels[key].color = getColorForLabel(newLabel);
+                                }
                             }
                         }
 
@@ -1619,6 +1636,9 @@
                         }
                         for (const [transition, count] of Object.entries(relabelCounts)) {
                             summary += `• ${count} pixel(s) relabeled: ${transition}\n`;
+                        }
+                        if (!shouldReVisualize) {
+                            summary += `\n[Note: Visualization not updated for large operations. Zoom out and back in to refresh view.]`;
                         }
                         console.log(`[SIMILARITY] ${summary}`);
                         alert(summary);
