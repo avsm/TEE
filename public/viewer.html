@@ -295,12 +295,12 @@
                     type="range"
                     id="similarity-threshold"
                     min="0"
-                    max="100"
-                    value="50"
+                    max="25"
+                    value="12"
                     style="width: 120px; cursor: pointer;"
                     oninput="updateThresholdDisplay()"
                 />
-                <span id="threshold-display" style="background: #333; padding: 4px 8px; border-radius: 3px; font-size: 13px; min-width: 40px; text-align: center;">20.00</span>
+                <span id="threshold-display" style="background: #333; padding: 4px 8px; border-radius: 3px; font-size: 13px; min-width: 40px; text-align: center;">12.00</span>
 
                 <button
                     id="find-similar-btn"
@@ -451,10 +451,7 @@
                         else if (maxSpan > 0.2) zoom = 12;
                         else if (maxSpan > 0.1) zoom = 13;
                         else if (maxSpan > 0.05) zoom = 14;
-                        else zoom = 15;
-
-                        console.log(`[VIEWPORT] Loaded: ${currentViewportName}, center: [${center[0].toFixed(4)}, ${center[1].toFixed(4)}], zoom: ${zoom}, bounds: [[${latMin.toFixed(4)}, ${lonMin.toFixed(4)}], [${latMax.toFixed(4)}, ${lonMax.toFixed(4)}]]`);
-                    }
+                        else zoom = 15;                    }
                 }
             } catch (error) {
                 console.warn('[VIEWPORT] Could not fetch viewport, using defaults:', error);
@@ -475,9 +472,7 @@
             // Apply same bounds as embedding/RGB maps so all maps stay in sync
             if (viewportBounds) {
                 maps.osm.setMaxBounds(viewportBounds);
-                maps.osm.options.maxBoundsViscosity = 1.0;
-                console.log(`[MAPS] OSM map clipped to viewport bounds`);
-            }
+                maps.osm.options.maxBoundsViscosity = 1.0;            }
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
@@ -505,9 +500,7 @@
             // Clip embedding map to viewport bounds
             if (viewportBounds) {
                 maps.embedding.setMaxBounds(viewportBounds);
-                maps.embedding.options.maxBoundsViscosity = 1.0;  // Prevent bouncing when hitting edges
-                console.log(`[MAPS] Embedding map clipped to viewport bounds: ${JSON.stringify(viewportBounds)}`);
-            }
+                maps.embedding.options.maxBoundsViscosity = 1.0;  // Prevent bouncing when hitting edges            }
 
             // RGB Satellite Map
             maps.rgb = L.map('map-rgb', {
@@ -528,15 +521,11 @@
             // Clip RGB satellite map to viewport bounds
             if (viewportBounds) {
                 maps.rgb.setMaxBounds(viewportBounds);
-                maps.rgb.options.maxBoundsViscosity = 1.0;  // Prevent bouncing when hitting edges
-                console.log(`[MAPS] RGB satellite map clipped to viewport bounds`);
-            }
+                maps.rgb.options.maxBoundsViscosity = 1.0;  // Prevent bouncing when hitting edges            }
 
             // Add click handlers
             Object.keys(maps).forEach(panel => {
                 maps[panel].on('click', function(e) {
-                    console.log(`[CLICK] Panel: ${panel}, explorerMode: ${explorerMode}, labelingMode: ${labelingMode}, lat: ${e.latlng.lat}, lng: ${e.latlng.lng}`);
-
                     // Disable labeling on OSM panel
                     if (panel === 'osm') {
                         console.log('[CLICK] Labeling disabled on OSM panel');
@@ -553,9 +542,7 @@
                             extractAndLabelEmbedding(e.latlng.lat, e.latlng.lng);
                         }
                     } else if (panel === 'rgb') {
-                        // Old behavior: add marker only for RGB panel
-                        console.log(`[CLICK] Routing to marker handler for RGB panel`);
-                        const label = document.getElementById('label-input')?.value || 'unlabeled';
+                        // Old behavior: add marker only for RGB panel                        const label = document.getElementById('label-input')?.value || 'unlabeled';
                         addMarker(panel, e.latlng.lat, e.latlng.lng, label);
                     }
                 });
@@ -877,35 +864,21 @@
         }
 
         // Update the active label dropdown
-        function updateLabelDropdown() {
-            console.log('[DROPDOWN] Updating dropdown, definedLabels:', definedLabels);
-            const select = document.getElementById('active-label');
+        function updateLabelDropdown() {            const select = document.getElementById('active-label');
             if (!select) {
                 console.error('[DROPDOWN] ERROR: Could not find element with id="active-label"');
                 return;
             }
-            console.log('[DROPDOWN] Found select element:', select);
-
             select.innerHTML = '';
-            if (definedLabels.length === 0) {
-                console.log('[DROPDOWN] No labels, showing placeholder');
-                select.innerHTML = '<option value="">No labels yet</option>';
+            if (definedLabels.length === 0) {                select.innerHTML = '<option value="">No labels yet</option>';
                 select.disabled = true;
-            } else {
-                console.log('[DROPDOWN] Adding', definedLabels.length, 'labels to dropdown');
-                definedLabels.forEach(label => {
+            } else {                definedLabels.forEach(label => {
                     const option = document.createElement('option');
                     option.value = label;
                     option.textContent = label;
-                    select.appendChild(option);
-                    console.log('[DROPDOWN] Added option:', label);
-                });
+                    select.appendChild(option);                });
                 select.value = definedLabels[0];
-                select.disabled = false;
-                console.log('[DROPDOWN] Set initial value to:', definedLabels[0]);
-            }
-            console.log('[DROPDOWN] Dropdown update complete. Current options:', select.innerHTML);
-        }
+                select.disabled = false;            }        }
 
         // Start labeling mode
         function startLabeling() {
@@ -941,37 +914,6 @@
 
         // Extract embedding and associate with label
         async function extractAndLabelEmbedding(lat, lon) {
-            console.log(`[LABELING] Click at (${lat.toFixed(6)}, ${lon.toFixed(6)}), labelingMode=${labelingMode}`);
-
-            if (!labelingMode) {
-                console.log('[LABELING] Labeling mode is OFF, ignoring click');
-                return;
-            }
-
-            const activeLabel = document.getElementById('active-label').value;
-            console.log(`[LABELING] Active label: "${activeLabel}"`);
-
-            if (!activeLabel) {
-                console.error('[LABELING] No active label selected!');
-                alert('Please select an active label!');
-                return;
-            }
-
-            try {
-                console.log(`[LABELING] Calling API to extract embedding at (${lat}, ${lon})...`);
-
-                // Call backend API to extract embedding
-                const response = await fetch('/api/embeddings/extract', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lat, lon })
-                });
-
-                console.log(`[LABELING] API response status: ${response.status}`);
-
-                const data = await response.json();
-                console.log(`[LABELING] API response:`, data);
-
                 if (!data.success) {
                     console.error(`[LABELING] API error: ${data.error}`);
                     alert(`Error extracting embedding: ${data.error}`);
@@ -1229,10 +1171,6 @@
                     }
 
                     let totalEmbeddings = 0;
-
-                    console.log('[IMPORT] Starting import process...');
-                    console.log('[IMPORT] definedLabels before:', definedLabels);
-
                     // Import each label
                     importData.forEach(item => {
                         const label = item.label;
@@ -1251,19 +1189,9 @@
 
                         console.log(`[IMPORT] Added ${embeddings.length} embeddings to "${label}"`);
                     });
-
-                    console.log('[IMPORT] definedLabels after import:', definedLabels);
-                    console.log('[IMPORT] embeddingLabels:', embeddingLabels);
-
                     // Sort labels alphabetically
                     definedLabels.sort();
-                    console.log('[IMPORT] definedLabels after sort:', definedLabels);
-
-                    // Update label dropdown using the standard function
-                    console.log('[IMPORT] Calling updateLabelDropdown()...');
-                    updateLabelDropdown();
-                    console.log('[IMPORT] updateLabelDropdown() completed');
-
+                    // Update label dropdown using the standard function                    updateLabelDropdown();
                     // Update label count to show imported embeddings
                     updateLabelCount();
 
@@ -1293,11 +1221,9 @@
         function updateThresholdDisplay() {
             const slider = document.getElementById('similarity-threshold');
             const display = document.getElementById('threshold-display');
-            // Map slider 0-100 to threshold 0.0-100.0 (for float32 embeddings in native range)
-            // Embeddings are 128D float32 with range ~[-12.6, 16.0]
-            // Actual L2 distances: min=0, median=28, mean=27.36, max~=45
-            // Threshold mapping: 0%=exact, 50%=median distance (~28), 100%=very broad (~100)
-            const value = (parseInt(slider.value) / 100) * 100.0;
+            // Map slider 0-25 to threshold 0.0-25.0
+            // Embeddings are 128D float32; L2 distances: min=0, median=28, mean=27.36, max~=45
+            const value = parseInt(slider.value);
             display.textContent = value.toFixed(2);
 
             // If in Explorer mode with cached results, update visualization
@@ -1321,10 +1247,7 @@
             const startBtn = document.getElementById('start-label-btn');
             if (startBtn) startBtn.style.display = 'none';
             const stopBtn = document.getElementById('stop-label-btn');
-            if (stopBtn) stopBtn.style.display = 'none';
-
-            console.log('[MODE] Switched to Explorer mode');
-        }
+            if (stopBtn) stopBtn.style.display = 'none';        }
 
         // Switch to Labeling Mode
         function switchToLabelingMode() {
@@ -1339,10 +1262,7 @@
 
             // Show labeling controls
             const startBtn = document.getElementById('start-label-btn');
-            if (startBtn) startBtn.style.display = 'inline-block';
-
-            console.log('[MODE] Switched to Labeling mode');
-        }
+            if (startBtn) startBtn.style.display = 'inline-block';        }
 
         // Clear explorer results and visualization
         function clearExplorerResults() {
@@ -1382,8 +1302,6 @@
 
         // Explorer click handler - one-click similarity search
         async function explorerClick(lat, lon) {
-            console.log(`[EXPLORER] Click at (${lat.toFixed(6)}, ${lon.toFixed(6)})`);
-
             // Clear previous results
             clearExplorerResults();
 
@@ -1391,28 +1309,19 @@
             showExplorerLoading();
 
             try {
-                // Step 1: Extract embedding
-                console.log(`[EXPLORER] Calling /api/embeddings/extract...`);
-                const extractResp = await fetch('/api/embeddings/extract', {
+                // Step 1: Extract embedding                const extractResp = await fetch('/api/embeddings/extract', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({lat, lon})
                 });
                 const extractData = await extractResp.json();
-
-                console.log(`[EXPLORER] Extract response:`, extractData);
-
                 if (!extractData.success) {
                     console.error(`[EXPLORER] Extract failed: ${extractData.error}`);
                     alert(`Error: ${extractData.error}`);
                     return;
                 }
-
-                console.log(`[EXPLORER] Extracted embedding at pixel (${extractData.pixel.x}, ${extractData.pixel.y})`);
-
                 // Step 2: Search similar with wide threshold for caching
-                const cacheThreshold = 35.0;  // Wide net to cache most results
-                console.log(`[EXPLORER] Calling /api/embeddings/search-similar with threshold=${cacheThreshold}, viewport=${currentViewportName}...`);
+                const cacheThreshold = 25.0;  // Cache up to max slider value
                 const searchResp = await fetch('/api/embeddings/search-similar', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -1423,17 +1332,11 @@
                     })
                 });
                 const searchData = await searchResp.json();
-
-                console.log(`[EXPLORER] Search response:`, searchData);
-
                 if (!searchData.success) {
                     console.error(`[EXPLORER] Search failed: ${searchData.error}`);
                     alert(`Error: ${searchData.error}`);
                     return;
                 }
-
-                console.log(`[EXPLORER] Backend response: matches=${searchData.matches.length}, query_stats=`, searchData.query_stats);
-
                 // Log distance statistics (avoid spreading large arrays)
                 if (searchData.matches.length > 0) {
                     let minDist = Infinity;
@@ -1447,8 +1350,6 @@
                     }
 
                     const avgDist = sumDist / searchData.matches.length;
-                    console.log(`[EXPLORER] Distance range: min=${minDist.toFixed(2)}, max=${maxDist.toFixed(2)}, avg=${avgDist.toFixed(2)}`);
-
                     // Check if we're hitting result limit
                     if (searchData.matches.length === 250000 && searchData.query_stats.matches_found > 250000) {
                         console.warn(`[EXPLORER] ⚠️  HITTING RESULT LIMIT! Backend found ${searchData.query_stats.matches_found} matches but returning only 250K. Increase MAX_RESULTS in backend.`);
@@ -1486,12 +1387,8 @@
             }
 
             const currentThreshold = parseFloat(document.getElementById('threshold-display').textContent);
-            console.log(`[EXPLORER] updateExplorerVisualization called - cached ${explorerResults.allMatches.length} results, current threshold: ${currentThreshold}`);
-
             // If threshold exceeds cache, fetch more matches from backend
             if (currentThreshold > explorerResults.cacheThreshold) {
-                console.log(`[EXPLORER] Threshold ${currentThreshold} exceeds cache ${explorerResults.cacheThreshold}, fetching more matches...`);
-
                 try {
                     const searchResp = await fetch('/api/embeddings/search-similar', {
                         method: 'POST',
@@ -1505,8 +1402,6 @@
                     const searchData = await searchResp.json();
 
                     if (searchData.success) {
-                        console.log(`[EXPLORER] Fetched ${searchData.matches.length} matches with threshold ${currentThreshold}`);
-
                         // Update cache with new results
                         explorerResults.allMatches = searchData.matches;
                         explorerResults.cacheThreshold = currentThreshold;
@@ -1523,9 +1418,6 @@
 
             // Filter cached results by current threshold
             const filteredMatches = explorerResults.allMatches.filter(m => m.distance <= currentThreshold);
-
-            console.log(`[EXPLORER] Showing ${filteredMatches.length} of ${explorerResults.allMatches.length} matches (threshold: ${currentThreshold})`);
-
             // Visualize filtered results
             visualizeExplorerResults(filteredMatches);
 
@@ -1555,23 +1447,17 @@
 
         // Visualize explorer results with adaptive rendering
         function visualizeExplorerResults(matches) {
-            console.log(`[EXPLORER] visualizeExplorerResults called with ${matches.length} matches`);
-
             if (matches.length === 0) {
                 console.log('[EXPLORER] No matches to visualize');
                 return;
             }
 
             // If canvas layer exists (slider change), just update matches
-            if (explorerCanvasLayer) {
-                console.log(`[EXPLORER] Reusing existing canvas layer, updating to ${matches.length} matches`);
-                explorerCanvasLayer.updateMatches(matches);
+            if (explorerCanvasLayer) {                explorerCanvasLayer.updateMatches(matches);
                 return;
             }
 
             // New search: create canvas layer and layer group
-            console.log(`[EXPLORER] Creating new canvas layer for ${matches.length} matches`);
-
             const layerGroup = L.layerGroup();
 
             // Create and add canvas layer to RGB (Bing satellite) panel
@@ -1582,12 +1468,7 @@
             layerGroup.addTo(maps.rgb);
             explorerVisualization = layerGroup;
 
-            // Add source pixel marker to RGB panel
-            console.log(`[EXPLORER] Adding source pixel marker at (${explorerResults.sourcePixel.lat}, ${explorerResults.sourcePixel.lon})`);
-            visualizeSourcePixel(explorerResults.sourcePixel.lat, explorerResults.sourcePixel.lon, layerGroup);
-
-            console.log(`[EXPLORER] Visualization complete - ${matches.length} white pixels + 1 source marker added`);
-        }
+            // Add source pixel marker to RGB panel            visualizeSourcePixel(explorerResults.sourcePixel.lat, explorerResults.sourcePixel.lon, layerGroup);        }
 
 // Custom canvas layer for direct pixel rendering
         class DirectCanvasLayer extends L.Layer {
@@ -1699,9 +1580,7 @@
 
             // Add to layer group
             if (layerGroup) {
-                layerGroup.addLayer(sourceMarker);
-                console.log(`[EXPLORER] Source marker added to layer group`);
-            }
+                layerGroup.addLayer(sourceMarker);            }
         }
 
         // Calculate average embedding from array of embeddings
@@ -1722,10 +1601,7 @@
             // Embeddings are float32 values (e.g., -2.5, 5.8, 1.3), not uint8 (0-255)
             for (let i = 0; i < dim; i++) {
                 avgEmb[i] = avgEmb[i] / embeddings.length;
-            }
-
-            console.log(`[SIMILARITY] Calculated average embedding: ${dim} dims, range [${Math.min(...avgEmb).toFixed(2)}, ${Math.max(...avgEmb).toFixed(2)}]`);
-            return avgEmb;
+            }            return avgEmb;
         }
 
         // Find similar pixels using ALL labeled embeddings (not average)
@@ -1747,17 +1623,11 @@
             clearSimilarPixels();
 
             const labeledEmbeddings = embeddingLabels[activeLabel];
-            console.log(`[SIMILARITY] Searching for pixels similar to ANY of ${labeledEmbeddings.length} labeled "${activeLabel}" embeddings`);
-
             // Get threshold
             const threshold = parseFloat(document.getElementById('threshold-display').textContent);
-            console.log(`[SIMILARITY] Threshold: ${threshold}`);
-
             // Use current viewport for similarity search
             try {
                 const viewportId = currentViewportName;
-                console.log(`[SIMILARITY] Viewport: ${viewportId}`);
-
                 // Show loading state
                 document.getElementById('find-similar-btn').disabled = true;
                 document.getElementById('find-similar-btn').textContent = `Searching (0/${labeledEmbeddings.length})...`;
@@ -1772,9 +1642,6 @@
 
                     // Update progress
                     document.getElementById('find-similar-btn').textContent = `Searching (${completed}/${labeledEmbeddings.length})...`;
-
-                    console.log(`[SIMILARITY] Searching embedding ${i + 1}/${labeledEmbeddings.length}...`);
-
                     const requestBody = {
                         embedding: embedding,
                         threshold: threshold,
@@ -1793,9 +1660,6 @@
                         console.warn(`[SIMILARITY] Search ${i + 1} failed: ${data.error}`);
                         continue;
                     }
-
-                    console.log(`[SIMILARITY] Search ${i + 1} found ${data.matches.length} matches`);
-
                     // Add matches to map, using pixel coords as key to deduplicate
                     for (const match of data.matches) {
                         const key = `${match.pixel.x},${match.pixel.y}`;
@@ -1808,8 +1672,6 @@
 
                 // Convert map to array
                 const uniqueMatches = Array.from(allMatches.values());
-                console.log(`[SIMILARITY] Found ${uniqueMatches.length} unique matches across all ${labeledEmbeddings.length} embeddings`);
-
                 // Visualize results in preview mode
                 visualizeSimilarPixels(uniqueMatches, activeLabel);
 
@@ -1912,9 +1774,6 @@
         // Clear similar pixels preview (cancel search)
         function clearSimilarPixels() {
             if (Object.keys(similarPixels).length === 0) return;
-
-            console.log(`[SIMILARITY] Clearing ${Object.keys(similarPixels).length} preview pixels`);
-
             // Remove all preview visualizations
             for (const [key, pixelData] of Object.entries(similarPixels)) {
                 if (pixelData.rectangle) {
@@ -1950,9 +1809,6 @@
             if (!confirm(`Commit ${pixelCount} similar pixels to label "${activeLabel}" and relabel existing pixels?`)) {
                 return;
             }
-
-            console.log(`[SIMILARITY] Committing ${pixelCount} similar pixels to "${activeLabel}"`);
-
             try {
                 // Get average embedding for the current label (before adding new pixels)
                 const avgEmbedding = calculateAverageEmbedding(embeddingLabels[activeLabel]);
@@ -1993,15 +1849,9 @@
                     newlyCommitted.push(key);
                 }
 
-                if (shouldVisualize) {
-                    console.log(`[SIMILARITY] ✓ Visualized ${newlyCommitted.length} newly committed pixels`);
-                } else {
-                    console.log(`[SIMILARITY] ✓ Added ${newlyCommitted.length} newly committed pixels (visualization skipped for large operations)`);
-                }
+                if (shouldVisualize) {                } else {                }
 
                 // Step 3: Apply intelligent relabeling
-                console.log(`[SIMILARITY] Starting intelligent relabeling...`);
-
                 // Prepare data for relabeling endpoint
                 const relabelRequest = {
                     label_embeddings: embeddingLabels,
@@ -2030,12 +1880,8 @@
                 if (!relabelData.success) {
                     console.warn(`[SIMILARITY] Relabeling failed: ${relabelData.error}`);
                 } else {
-                    console.log(`[SIMILARITY] Relabeling complete: ${relabelData.stats.relabeled_pixels} relabeled, ${relabelData.stats.unchanged_pixels} unchanged`);
-
                     // Apply relabeling results
                     if (relabelData.relabeled && relabelData.relabeled.length > 0) {
-                        console.log(`[SIMILARITY] Applying ${relabelData.relabeled.length} relabelings...`);
-
                         // Threshold: only re-visualize if relabeled count is manageable (< 100)
                         // For large operations, just update the data structure to avoid freezing
                         const shouldReVisualize = relabelData.relabeled.length < 100;
@@ -2081,9 +1927,7 @@
                         }
                         if (!shouldReVisualize) {
                             summary += `\n[Note: Visualization not updated for large operations. Zoom out and back in to refresh view.]`;
-                        }
-                        console.log(`[SIMILARITY] ${summary}`);
-                        alert(summary);
+                        }                        alert(summary);
                     } else {
                         alert(`Successfully committed ${pixelCount} similar pixels!\nNo existing pixels needed relabeling.`);
                     }
@@ -2103,10 +1947,7 @@
             document.getElementById('commit-similar-btn').style.display = 'none';
             document.getElementById('clear-similar-btn').style.display = 'none';
             document.getElementById('similar-count').textContent = '0';
-            updateLabelCount();
-
-            console.log(`[SIMILARITY] ✓ Commit and relabel complete!`);
-        }
+            updateLabelCount();        }
 
         // Auto-clear preview when active label changes
         document.addEventListener('DOMContentLoaded', function() {
