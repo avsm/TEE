@@ -451,7 +451,8 @@
                         else if (maxSpan > 0.2) zoom = 12;
                         else if (maxSpan > 0.1) zoom = 13;
                         else if (maxSpan > 0.05) zoom = 14;
-                        else zoom = 15;                    }
+                        else zoom = 15;
+                    }
                 }
             } catch (error) {
                 console.warn('[VIEWPORT] Could not fetch viewport, using defaults:', error);
@@ -472,7 +473,8 @@
             // Apply same bounds as embedding/RGB maps so all maps stay in sync
             if (viewportBounds) {
                 maps.osm.setMaxBounds(viewportBounds);
-                maps.osm.options.maxBoundsViscosity = 1.0;            }
+                maps.osm.options.maxBoundsViscosity = 1.0;
+            }
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
@@ -500,7 +502,8 @@
             // Clip embedding map to viewport bounds
             if (viewportBounds) {
                 maps.embedding.setMaxBounds(viewportBounds);
-                maps.embedding.options.maxBoundsViscosity = 1.0;  // Prevent bouncing when hitting edges            }
+                maps.embedding.options.maxBoundsViscosity = 1.0;  // Prevent bouncing when hitting edges
+            }
 
             // RGB Satellite Map
             maps.rgb = L.map('map-rgb', {
@@ -521,7 +524,8 @@
             // Clip RGB satellite map to viewport bounds
             if (viewportBounds) {
                 maps.rgb.setMaxBounds(viewportBounds);
-                maps.rgb.options.maxBoundsViscosity = 1.0;  // Prevent bouncing when hitting edges            }
+                maps.rgb.options.maxBoundsViscosity = 1.0;  // Prevent bouncing when hitting edges
+            }
 
             // Add click handlers
             Object.keys(maps).forEach(panel => {
@@ -876,9 +880,12 @@
                     const option = document.createElement('option');
                     option.value = label;
                     option.textContent = label;
-                    select.appendChild(option);                });
+                    select.appendChild(option);
+                });
                 select.value = definedLabels[0];
-                select.disabled = false;            }        }
+                select.disabled = false;
+            }
+        }
 
         // Start labeling mode
         function startLabeling() {
@@ -1261,7 +1268,8 @@
             const startBtn = document.getElementById('start-label-btn');
             if (startBtn) startBtn.style.display = 'none';
             const stopBtn = document.getElementById('stop-label-btn');
-            if (stopBtn) stopBtn.style.display = 'none';        }
+            if (stopBtn) stopBtn.style.display = 'none';
+        }
 
         // Switch to Labeling Mode
         function switchToLabelingMode() {
@@ -1276,7 +1284,8 @@
 
             // Show labeling controls
             const startBtn = document.getElementById('start-label-btn');
-            if (startBtn) startBtn.style.display = 'inline-block';        }
+            if (startBtn) startBtn.style.display = 'inline-block';
+        }
 
         // Clear explorer results and visualization
         function clearExplorerResults() {
@@ -1598,7 +1607,8 @@
 
             // Add to layer group
             if (layerGroup) {
-                layerGroup.addLayer(sourceMarker);            }
+                layerGroup.addLayer(sourceMarker);
+            }
         }
 
         // Calculate average embedding from array of embeddings
