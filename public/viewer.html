@@ -1597,9 +1597,6 @@
                 this._map = map;
                 this._canvas = null;
                 this._ctx = null;
-                this._redrawScheduled = false;
-                // Store bound handlers for cleanup
-                this._boundScheduleRedraw = () => this._scheduleRedraw();
             }
 
             onAdd(map) {
@@ -1626,17 +1623,18 @@
 
                 // Bind events
                 this._map.on('resize', this._onResize, this);
-                this._map.on('zoom', this._boundScheduleRedraw);
-                this._map.on('move', () => this._redraw());  // Redraw immediately on pan to show off-screen pixels
+                this._map.on('zoom', this._redraw, this);
+                this._map.on('moveend', this._redraw, this);  // Redraw after pan completes (not during)
 
-                // Initial draw
+                // Initial draw - render ALL pixels, not just visible ones
+                // This prevents cutoff when panning to off-screen areas
                 this._redraw();
             }
 
             onRemove(map) {
                 this._map.off('resize', this._onResize, this);
-                this._map.off('zoom', this._boundScheduleRedraw);
-                // Note: move listener uses arrow function, will be garbage collected
+                this._map.off('zoom', this._redraw, this);
+                this._map.off('moveend', this._redraw, this);
 
                 if (this._canvas) {
                     this._canvas.remove();
@@ -1665,17 +1663,6 @@
             _onResize() {
                 this._updateCanvasSize();
                 this._redraw();
-            }
-
-            _scheduleRedraw() {
-                // Throttle redraws - only schedule if one isn't already pending
-                if (!this._redrawScheduled) {
-                    this._redrawScheduled = true;
-                    requestAnimationFrame(() => {
-                        this._redraw();
-                        this._redrawScheduled = false;
-                    });
-                }
             }
 
             _redraw() {
