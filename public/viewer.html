@@ -1598,7 +1598,6 @@
                 // Bind events
                 this._map.on('resize', this._onResize, this);
                 this._map.on('zoom', this._redraw, this);
-                this._map.on('moveend', this._redraw, this);  // Redraw after pan completes to sync with threshold changes
 
                 // Initial draw
                 this._redraw();
@@ -1606,7 +1605,7 @@
 
             onRemove(map) {
                 this._map.off('resize', this._onResize, this);
-                this._map.off('move zoom', this._redraw, this);
+                this._map.off('zoom', this._redraw, this);
 
                 if (this._canvas) {
                     this._canvas.remove();

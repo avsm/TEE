@@ -131,8 +131,19 @@ def compute_pca_for_year(year, viewport_id=None, bounds=None):
         profile = src.profile.copy()
         profile.update({
             'count': N_COMPONENTS,
-            'dtype': 'uint8'
+            'dtype': 'uint8',
+            'width': clipped_width,
+            'height': clipped_height
         })
+
+        # Update geotransform to start at the clipped region
+        if bounds:
+            # Shift geotransform to start at clipped region
+            new_transform = rasterio.transform.Affine(
+                transform.a, transform.b, transform.c + pixel_min_x * transform.a,
+                transform.d, transform.e, transform.f + pixel_min_y * transform.e
+            )
+            profile['transform'] = new_transform
 
         with rasterio.open(output_file, 'w', **profile) as dst:
             dst.write(rgb_image)
