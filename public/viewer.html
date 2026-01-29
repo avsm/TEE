@@ -1612,13 +1612,16 @@
                 this._canvas.style.pointerEvents = 'none';
                 this._canvas.style.willChange = 'transform';
 
-                // Add to overlay pane
-                const container = map.getPane('overlayPane');
-                container.appendChild(this._canvas);
+                // Add to map container (not overlay pane) to avoid Leaflet pane transforms
+                const mapContainer = map.getContainer();
+                mapContainer.appendChild(this._canvas);
 
                 // Set up canvas context
                 this._ctx = this._canvas.getContext('2d');
                 this._updateCanvasSize();
+
+                // Log for debugging
+                console.log(`[CANVAS] Added to map container, size: ${this._canvas.width} × ${this._canvas.height}`);
 
                 // Bind events
                 this._map.on('resize', this._onResize, this);
