@@ -295,7 +295,7 @@
                     type="range"
                     id="similarity-threshold"
                     min="0"
-                    max="25"
+                    max="35"
                     value="12"
                     style="width: 120px; cursor: pointer;"
                     oninput="updateThresholdDisplay()"
@@ -1345,7 +1345,7 @@
                     return;
                 }
                 // Step 2: Search similar with wide threshold for caching
-                const cacheThreshold = 25.0;  // Cache up to max slider value
+                const cacheThreshold = 35.0;  // Cache up to max slider value
                 const searchResp = await fetch('/api/embeddings/search-similar', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -1517,7 +1517,7 @@
                 this._canvas.style.top = '0';
                 this._canvas.style.left = '0';
                 this._canvas.style.pointerEvents = 'none';
-                this._canvas.style.opacity = '0.5';
+                this._canvas.style.opacity = '0.8';
                 this._canvas.style.zIndex = '999';
 
                 const mapContainer = map.getContainer();
@@ -1576,10 +1576,11 @@
 
                     visibleCount++;
 
-                    const x = Math.round(sw.x);
-                    const y = Math.round(ne.y);
-                    const width = Math.max(1, Math.round(ne.x - sw.x));
-                    const height = Math.max(1, Math.round(sw.y - ne.y));
+                    // Use floor for position and ceil for dimensions to prevent gaps and banding
+                    const x = Math.floor(sw.x);
+                    const y = Math.floor(ne.y);
+                    const width = Math.max(1, Math.ceil(ne.x - sw.x));
+                    const height = Math.max(1, Math.ceil(sw.y - ne.y));
 
                     ctx.fillRect(x, y, width, height);
                 }
