@@ -1639,8 +1639,11 @@
 
             _updateCanvasSize() {
                 const size = this._map.getSize();
+                // Set both the drawing surface AND the CSS display size to match
                 this._canvas.width = size.x;
                 this._canvas.height = size.y;
+                this._canvas.style.width = size.x + 'px';
+                this._canvas.style.height = size.y + 'px';
             }
 
             _onResize() {
