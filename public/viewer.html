@@ -250,6 +250,11 @@
         #progress-status.error {
             color: #dc3545;
         }
+
+        /* Debug: Show canvas outline to diagnose alignment issues */
+        .explorer-direct-canvas {
+            border: 1px solid rgba(255, 0, 0, 0.3) !important;
+        }
     </style>
 </head>
 <body>
@@ -1677,6 +1682,7 @@
 
                 const startTime = performance.now();
                 let drawnCount = 0;
+                let sampleLogged = false;
 
                 // Draw each pixel
                 for (const match of this.matches) {
@@ -1690,6 +1696,12 @@
                     // Ensure positive dimensions
                     const width = Math.max(1, ne.x - sw.x);
                     const height = Math.max(1, sw.y - ne.y);
+
+                    // Log sample coordinate for debugging
+                    if (!sampleLogged && drawnCount % 1000 === 0) {
+                        console.log(`[CANVAS] Sample pixel: lat=${match.lat.toFixed(6)}, lon=${match.lon.toFixed(6)} → screen x=${sw.x.toFixed(1)}, y=${ne.y.toFixed(1)}, size=${width}×${height}`);
+                        sampleLogged = true;
+                    }
 
                     // Draw filled rectangle
                     ctx.fillRect(sw.x, ne.y, width, height);
