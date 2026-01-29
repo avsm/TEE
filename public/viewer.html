@@ -1468,7 +1468,8 @@
             }
 
             // If canvas layer exists (slider change), just update matches
-            if (explorerCanvasLayer) {                explorerCanvasLayer.updateMatches(matches);
+            if (explorerCanvasLayer) {
+                explorerCanvasLayer.updateMatches(matches);
                 return;
             }
 
@@ -1483,7 +1484,9 @@
             layerGroup.addTo(maps.rgb);
             explorerVisualization = layerGroup;
 
-            // Add source pixel marker to RGB panel            visualizeSourcePixel(explorerResults.sourcePixel.lat, explorerResults.sourcePixel.lon, layerGroup);        }
+            // Add source pixel marker to RGB panel
+            visualizeSourcePixel(explorerResults.sourcePixel.lat, explorerResults.sourcePixel.lon, layerGroup);
+        }
 
 // Custom canvas layer for direct pixel rendering
         class DirectCanvasLayer extends L.Layer {
