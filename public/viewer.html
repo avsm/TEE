@@ -1601,7 +1601,7 @@
 
             onAdd(map) {
                 this._map = map;
-                this._originalMatches = this.matches.slice(); // Keep original matches for coordinate system
+                this._originalMatches = this.matches.slice();
 
                 // Create canvas element directly in map container
                 this._canvas = document.createElement('canvas');
@@ -1610,21 +1610,35 @@
                 this._canvas.style.top = '0';
                 this._canvas.style.left = '0';
                 this._canvas.style.pointerEvents = 'none';
-                this._canvas.style.opacity = '0.5';
-                this._canvas.style.zIndex = '999'; // Ensure it's on top
+                this._canvas.style.opacity = '0.8'; // Higher opacity for visibility
+                this._canvas.style.zIndex = '999';
 
-                // Add directly to map container
                 const mapContainer = map.getContainer();
                 mapContainer.appendChild(this._canvas);
 
                 this._ctx = this._canvas.getContext('2d');
                 this._updateCanvasSize();
 
+                // Test: Draw a border to verify canvas is working
+                this._testCanvasRender();
+
                 // Redraw on any map change
                 this._map.on('move zoom resize', this._redraw, this);
 
-                console.log('[CANVAS] Layer added to map container');
+                console.log('[CANVAS] Layer added to map container, size:', this._canvas.width, 'x', this._canvas.height);
                 this._redraw();
+            }
+
+            _testCanvasRender() {
+                // Draw a red border around the canvas to verify it's working
+                const ctx = this._ctx;
+                const w = this._canvas.width;
+                const h = this._canvas.height;
+
+                ctx.strokeStyle = '#FF0000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(0, 0, w, h);
+                console.log('[CANVAS] Drew test border around canvas');
             }
 
             onRemove(map) {
