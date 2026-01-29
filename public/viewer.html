@@ -1602,7 +1602,7 @@
             onAdd(map) {
                 this._map = map;
 
-                // Create canvas element positioned absolutely on map container
+                // Create canvas element
                 this._canvas = document.createElement('canvas');
                 this._canvas.className = 'explorer-direct-canvas';
                 this._canvas.style.position = 'absolute';
@@ -1612,20 +1612,18 @@
                 this._canvas.style.pointerEvents = 'none';
                 this._canvas.style.opacity = '0.5';
 
-                // Add directly to map container (NOT to overlay pane with transforms)
-                const container = map.getContainer();
-                container.appendChild(this._canvas);
-
-                console.log('[CANVAS] Added to map container', container.className);
+                // Add to Leaflet's overlay pane - this automatically applies CSS transforms during panning
+                const pane = map.getPane('overlayPane');
+                pane.appendChild(this._canvas);
 
                 this._ctx = this._canvas.getContext('2d');
                 this._updateCanvasSize();
 
-                // Redraw on zoom and move events
+                // Only redraw on zoom and moveend (after pan completes)
+                // Don't redraw during panning - let Leaflet's CSS transforms handle synchronization
                 this._map.on('zoom moveend', this._redraw, this);
                 this._map.on('resize', this._onResize, this);
 
-                console.log('[CANVAS] Events bound, drawing...');
                 this._redraw();
             }
 
@@ -1654,8 +1652,6 @@
 
                 // Scale drawing operations by device pixel ratio
                 this._ctx.scale(dpr, dpr);
-
-                console.log(`[CANVAS] Sized to ${size.x}×${size.y}px (${this._canvas.width}×${this._canvas.height} device pixels, dpr=${dpr})`);
             }
 
             _onResize() {
