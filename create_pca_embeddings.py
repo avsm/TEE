@@ -55,7 +55,7 @@ def compute_pca_for_year(year, viewport_id=None, bounds=None):
         # Clip to viewport bounds if provided
         if bounds:
             transform = src.transform
-            min_lat, min_lon, max_lat, max_lon = bounds
+            min_lon, min_lat, max_lon, max_lat = bounds  # bounds_tuple is (min_lon, min_lat, max_lon, max_lat)
 
             # Convert lat/lon bounds to pixel coordinates
             pixel_min_x = int((min_lon - transform.c) / transform.a)

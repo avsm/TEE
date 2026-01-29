@@ -98,7 +98,7 @@ def create_faiss_index():
 
             # Clip to viewport bounds
             transform = src.transform
-            min_lat, min_lon, max_lat, max_lon = bounds
+            min_lon, min_lat, max_lon, max_lat = bounds  # bounds_tuple is (min_lon, min_lat, max_lon, max_lat)
 
             # Convert lat/lon bounds to pixel coordinates
             # x = (lon - transform.c) / transform.a
