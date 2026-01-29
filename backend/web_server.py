@@ -103,7 +103,14 @@ def get_viewport_data_size(viewport_name, active_viewport_name):
     return round(total_size / (1024 * 1024), 1)
 
 def trigger_data_download_and_processing(viewport_name):
-    """Download embeddings and create pyramids. Satellite data uses Bing/Esri imagery."""
+    """Download embeddings and run full preprocessing pipeline:
+    1. download_embeddings.py - Download GeoTessera embeddings (clipped to viewport)
+    2. create_pca_embeddings.py - Create RGB visualization from first 3 bands (clipped)
+    3. create_pyramids.py - Create pyramid tiles for Tessera and RGB
+    4. create_faiss_index.py - Create FAISS index for similarity search (clipped)
+
+    Satellite data uses Bing/Esri imagery (not downloaded locally).
+    """
     def download_and_process():
         try:
             project_root = Path(__file__).parent.parent
@@ -123,6 +130,14 @@ def trigger_data_download_and_processing(viewport_name):
                 logger.error(f"[DATA] ✗ Embeddings mosaic file not found for '{viewport_name}' after download")
                 return
 
+            # Create RGB visualization from first 3 embedding bands
+            logger.info(f"[DATA] Creating RGB visualization for '{viewport_name}'...")
+            result = run_script('create_pca_embeddings.py', timeout=1800)
+            if result.returncode != 0:
+                logger.error(f"[DATA] ✗ RGB visualization creation failed for '{viewport_name}':\n{result.stderr}")
+                return
+            logger.info(f"[DATA] ✓ RGB visualization created for '{viewport_name}'")
+
             # Create pyramids (satellite layer uses Esri World Imagery)
             logger.info(f"[DATA] Creating pyramids for '{viewport_name}'...")
             result = run_script('create_pyramids.py', timeout=1800)
@@ -130,6 +145,14 @@ def trigger_data_download_and_processing(viewport_name):
                 logger.error(f"[DATA] ✗ Pyramid creation failed for '{viewport_name}':\n{result.stderr}")
                 return
             logger.info(f"[DATA] ✓ Pyramids created for '{viewport_name}'")
+
+            # Create FAISS index for similarity search
+            logger.info(f"[DATA] Creating FAISS index for '{viewport_name}'...")
+            result = run_script('create_faiss_index.py', timeout=1800)
+            if result.returncode != 0:
+                logger.error(f"[DATA] ✗ FAISS index creation failed for '{viewport_name}':\n{result.stderr}")
+                return
+            logger.info(f"[DATA] ✓ FAISS index created for '{viewport_name}'")
 
         except subprocess.TimeoutExpired:
             logger.error(f"[DATA] ✗ Download/processing timeout for '{viewport_name}'")
