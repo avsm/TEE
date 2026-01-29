@@ -1323,7 +1323,8 @@
             showExplorerLoading();
 
             try {
-                // Step 1: Extract embedding                const extractResp = await fetch('/api/embeddings/extract', {
+                // Step 1: Extract embedding
+                const extractResp = await fetch('/api/embeddings/extract', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({lat, lon})
