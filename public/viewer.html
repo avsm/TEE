@@ -1517,7 +1517,7 @@
                 this._canvas.style.top = '0';
                 this._canvas.style.left = '0';
                 this._canvas.style.pointerEvents = 'none';
-                this._canvas.style.opacity = '0.8';
+                this._canvas.style.opacity = '0.5';
                 this._canvas.style.zIndex = '999';
 
                 const mapContainer = map.getContainer();
@@ -1559,11 +1559,13 @@
                 // Clear canvas
                 ctx.clearRect(0, 0, size.x, size.y);
 
-                ctx.fillStyle = '#000000';
+                ctx.fillStyle = '#FFFF00';
 
                 let visibleCount = 0;
 
-                // Draw each pixel with slight overlap to eliminate gaps from rounding
+                // Draw each pixel with overlap to eliminate banding from rounding errors
+                const OVERLAP = 1.0;  // Pixels overlap by 1px to hide seams from coordinate rounding
+
                 for (const match of this.matches) {
                     const matchBounds = calculatePixelBounds(match.lat, match.lon);
                     const sw = map.latLngToContainerPoint(matchBounds[0]);
@@ -1577,10 +1579,10 @@
                     visibleCount++;
 
                     // Calculate exact bounds without rounding, let canvas handle rendering
-                    const x = sw.x;
-                    const y = ne.y;
-                    const width = ne.x - sw.x;
-                    const height = sw.y - ne.y;
+                    const x = sw.x - OVERLAP;
+                    const y = ne.y - OVERLAP;
+                    const width = ne.x - sw.x + 2 * OVERLAP;
+                    const height = sw.y - ne.y + 2 * OVERLAP;
 
                     // Only draw if size is reasonable (avoid zero/negative sizes)
                     if (width > 0.1 && height > 0.1) {
