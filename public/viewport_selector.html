@@ -636,6 +636,9 @@
 
                 <!-- Quick Viewer Access -->
                 <div class="section" style="margin-top: auto; border-top: 1px solid #ddd; padding-top: 15px;">
+                    <div id="dataStatusMessage" style="font-size: 12px; color: #666; margin-bottom: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; display: none;">
+                        <div id="dataStatusText">Loading...</div>
+                    </div>
                     <button class="btn-download" id="quickViewerBtn" onclick="goToViewer()" style="width: 100%; border-color: #667eea; color: #667eea; background: #f0f4ff;">
                         <span>▶ Open Viewer</span>
                     </button>
@@ -1013,9 +1016,74 @@
         }
 
         // Go directly to viewer
-        function goToViewer() {
-            // Use the main viewport-aware viewer (viewer.html is now viewport-agnostic)
-            window.location.href = 'viewer.html';
+        async function checkAndDisplayDataStatus(viewportName) {
+            try {
+                const response = await fetch(`/api/viewports/${viewportName}/data-status`);
+                const result = await response.json();
+                if (!result.success) return;
+
+                const status = result.data;
+                const statusEl = document.getElementById('dataStatusMessage');
+                const statusText = document.getElementById('dataStatusText');
+
+                // Build status message
+                let message = '';
+                let ready = status.pyramids && status.faiss;
+
+                if (status.pyramids && status.faiss) {
+                    message = `✅ Ready to view (${status.years_available.length} year${status.years_available.length !== 1 ? 's' : ''})`;
+                    statusEl.style.background = '#e8f5e9';
+                    statusEl.style.color = '#2e7d32';
+                } else {
+                    let processing = [];
+                    if (!status.pyramids) processing.push('Creating pyramids');
+                    if (!status.faiss) processing.push('Building FAISS index');
+                    message = `⏳ Processing: ${processing.join(', ')}`;
+                    statusEl.style.background = '#fff3cd';
+                    statusEl.style.color = '#856404';
+                }
+
+                statusText.textContent = message;
+                statusEl.style.display = 'block';
+
+                // Disable viewer button if data not ready
+                const viewerBtn = document.getElementById('quickViewerBtn');
+                viewerBtn.disabled = !ready;
+                if (!ready) {
+                    viewerBtn.style.opacity = '0.5';
+                    viewerBtn.style.cursor = 'not-allowed';
+                } else {
+                    viewerBtn.style.opacity = '1';
+                    viewerBtn.style.cursor = 'pointer';
+                }
+            } catch (error) {
+                console.error('Error checking data status:', error);
+            }
+        }
+
+        async function goToViewer() {
+            // Check data readiness before allowing navigation
+            try {
+                const response = await fetch(`/api/viewports/${currentViewport.name}/data-status`);
+                const result = await response.json();
+                const status = result.data;
+
+                // Require pyramids and FAISS to be ready
+                if (!status.pyramids || !status.faiss) {
+                    let missing = [];
+                    if (!status.pyramids) missing.push('Pyramids');
+                    if (!status.faiss) missing.push('FAISS index');
+
+                    alert(`Data not ready yet.\n\nStill processing: ${missing.join(', ')}\n\nPlease wait a few minutes and try again.`);
+                    return;
+                }
+
+                // Data is ready, navigate to viewer
+                window.location.href = 'viewer.html';
+            } catch (error) {
+                console.error('Error checking data status:', error);
+                alert('Error checking data status. Please try again.');
+            }
         }
 
         // Delete a viewport
@@ -1282,10 +1350,15 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
                     drawViewportBox();
                     loadViewports(); // Refresh list to show active indicator
 
+                    // Check and display data status
+                    await checkAndDisplayDataStatus(name);
+
                     // Show progress tracking for any ongoing operations
                     if (!data.faiss_ready) {
                         console.log(`[VIEWPORT] Starting progress tracking for "${name}"`);
                         await pollAllOperations(name);
+                        // Update status after operations complete
+                        await checkAndDisplayDataStatus(name);
                     } else {
                         console.log(`[VIEWPORT] FAISS index ready for "${name}"`);
                     }
