@@ -18,7 +18,7 @@ from lib.viewport_utils import get_active_viewport
 # Configuration
 DATA_DIR = Path.home() / "blore_data"
 MOSAICS_DIR = DATA_DIR / "mosaics"
-OUTPUT_DIR = DATA_DIR / "mosaics" / "pca"
+OUTPUT_DIR = DATA_DIR / "mosaics" / "rgb"
 YEARS = range(2024, 2025)  # 2024 only
 N_COMPONENTS = 3  # RGB
 CHUNK_SIZE = 1000  # Process in chunks to save memory

@@ -38,8 +38,8 @@ def get_reader(viewport, map_id, zoom_level):
 
         if map_id == 'satellite':
             tif_path = viewport_pyramids_dir / 'satellite' / f'level_{pyramid_level}.tif'
-        elif map_id == 'pca':
-            tif_path = viewport_pyramids_dir / 'pca' / '2024' / f'level_{pyramid_level}.tif'
+        elif map_id == 'rgb':
+            tif_path = viewport_pyramids_dir / 'rgb' / '2024' / f'level_{pyramid_level}.tif'
         else:
             # map_id is a year like '2024'
             tif_path = viewport_pyramids_dir / map_id / f'level_{pyramid_level}.tif'
@@ -141,8 +141,8 @@ def get_bounds(viewport, map_id):
 
         if map_id == 'satellite':
             tif_path = viewport_pyramids_dir / 'satellite' / 'level_0.tif'
-        elif map_id == 'pca':
-            tif_path = viewport_pyramids_dir / 'pca' / '2024' / 'level_0.tif'
+        elif map_id == 'rgb':
+            tif_path = viewport_pyramids_dir / 'rgb' / '2024' / 'level_0.tif'
         else:
             # map_id is a year like '2024'
             tif_path = viewport_pyramids_dir / map_id / 'level_0.tif'
@@ -183,9 +183,9 @@ def health():
                 if (viewport_dir / 'satellite' / 'level_0.tif').exists():
                     available_maps.append('satellite')
 
-                # Check for PCA
-                if (viewport_dir / 'pca' / '2024' / 'level_0.tif').exists():
-                    available_maps.append('pca')
+                # Check for RGB
+                if (viewport_dir / 'rgb' / '2024' / 'level_0.tif').exists():
+                    available_maps.append('rgb')
 
                 if available_maps:
                     viewports_data[viewport_name] = available_maps
@@ -202,6 +202,6 @@ if __name__ == '__main__':
     print("  - http://localhost:5125/tiles/<viewport>/<map_id>/<z>/<x>/<y>.png")
     print("  - http://localhost:5125/bounds/<viewport>/<map_id>")
     print("  - http://localhost:5125/health")
-    print("\nMap IDs: 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, satellite, pca")
+    print("\nMap IDs: 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, satellite, rgb")
     print("\nStarting server on http://localhost:5125")
     app.run(debug=True, port=5125, threaded=True)

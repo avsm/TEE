@@ -34,7 +34,7 @@ from lib.progress_tracker import ProgressTracker
 # Configuration
 DATA_DIR = Path.home() / "blore_data"
 MOSAICS_DIR = DATA_DIR / "mosaics"
-PCA_MOSAICS_DIR = DATA_DIR / "mosaics" / "pca"
+RGB_MOSAICS_DIR = DATA_DIR / "mosaics" / "rgb"
 PYRAMIDS_BASE_DIR = DATA_DIR / "pyramids"
 YEARS = range(2024, 2025)  # 2024 only
 NUM_ZOOM_LEVELS = 6  # 6 useful zoom levels (skip the very zoomed-out tiny levels)
@@ -267,7 +267,7 @@ def main():
         # Use viewport-specific filename
         if viewport_id:
             # Prefer cropped RGB mosaic (viewport-clipped, first 3 bands) if it exists
-            rgb_file_path = PCA_MOSAICS_DIR / f"{viewport_id}_{year}_rgb.tif"
+            rgb_file_path = RGB_MOSAICS_DIR / f"{viewport_id}_{year}_rgb.tif"
             tessera_file = MOSAICS_DIR / f"{viewport_id}_embeddings_{year}.tif"
 
             # Use RGB file if available (already cropped and RGB), otherwise extract from embeddings
@@ -282,7 +282,7 @@ def main():
                 rgb_temp_file = PYRAMIDS_BASE_DIR / f"temp_rgb_{year}.tif"
                 rgb_file = create_rgb_from_tessera(tessera_file, rgb_temp_file, upscale_factor=3)
             else:
-                print(f"\n⚠️  Skipping {year}: Neither PCA nor embeddings file found")
+                print(f"\n⚠️  Skipping {year}: Neither RGB nor embeddings file found")
                 progress.update("processing", f"Skipped {year}: file not found", current_file=f"embeddings_{year}")
                 continue
         else:
@@ -335,44 +335,44 @@ def main():
     else:
         print(f"\n⚠️  Satellite RGB file not found: {satellite_file}")
 
-    # Process PCA embeddings (2017-2024)
+    # Process RGB from embeddings (2017-2024)
     print("\n" + "=" * 70)
-    print("Processing PCA Embeddings")
+    print("Processing RGB Embeddings")
     print("=" * 70)
 
     for year in YEARS:
         if viewport_id:
-            pca_file = PCA_MOSAICS_DIR / f"{viewport_id}_{year}_pca.tif"
+            rgb_file = RGB_MOSAICS_DIR / f"{viewport_id}_{year}_rgb.tif"
         else:
-            pca_file = None
+            rgb_file = None
 
-        if not pca_file or not pca_file.exists():
-            print(f"\n⚠️  Skipping PCA {year}: File not found")
+        if not rgb_file or not rgb_file.exists():
+            print(f"\n⚠️  Skipping RGB {year}: File not found")
             continue
 
-        # Create viewport-specific PCA directory
+        # Create viewport-specific RGB directory
         if viewport_id:
             viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport_id
         else:
-            # Fallback: derive viewport name from PCA filename
-            pca_stem = pca_file.stem  # e.g., "bangalore_2024_pca" -> "bangalore"
-            fallback_name = pca_stem.split('_')[0] if '_' in pca_stem else pca_stem
-            print(f"⚠️  Warning: Could not determine viewport for PCA, using: {fallback_name}")
+            # Fallback: derive viewport name from RGB filename
+            rgb_stem = rgb_file.stem  # e.g., "bangalore_2024_rgb" -> "bangalore"
+            fallback_name = rgb_stem.split('_')[0] if '_' in rgb_stem else rgb_stem
+            print(f"⚠️  Warning: Could not determine viewport for RGB, using: {fallback_name}")
             viewport_pyramids_dir = PYRAMIDS_BASE_DIR / fallback_name
 
-        pca_pyramids_dir = viewport_pyramids_dir / "pca"
-        pca_pyramids_dir.mkdir(parents=True, exist_ok=True)
+        rgb_pyramids_dir = viewport_pyramids_dir / "rgb"
+        rgb_pyramids_dir.mkdir(parents=True, exist_ok=True)
 
-        # Upscale PCA RGB for better resolution
-        pca_upscaled_file = pca_pyramids_dir / f"{viewport_id}_{year}_pca_upscaled.tif"
-        upscale_image(pca_file, pca_upscaled_file, upscale_factor=3)
+        # Upscale RGB for better resolution
+        rgb_upscaled_file = rgb_pyramids_dir / f"{viewport_id}_{year}_rgb_upscaled.tif"
+        upscale_image(rgb_file, rgb_upscaled_file, upscale_factor=3)
 
-        # Create pyramids from upscaled PCA RGB
-        pca_year_dir = pca_pyramids_dir / str(year)
-        create_pyramids_for_image(pca_upscaled_file, pca_year_dir, f"PCA {year}", upscale_factor=1)
+        # Create pyramids from upscaled RGB
+        rgb_year_dir = rgb_pyramids_dir / str(year)
+        create_pyramids_for_image(rgb_upscaled_file, rgb_year_dir, f"RGB {year}", upscale_factor=1)
 
         # Clean up upscaled temp file
-        pca_upscaled_file.unlink()
+        rgb_upscaled_file.unlink()
 
     print("\n" + "=" * 70)
     print("✅ Pyramid generation complete!")
@@ -397,14 +397,14 @@ def main():
         print(f"  - {viewport_pyramids_dir.absolute()}")
 
         # Summary of years created for this viewport
-        years_created = [d.name for d in (viewport_pyramids_dir).iterdir() if d.is_dir() and d.name not in ['satellite', 'pca']]
+        years_created = [d.name for d in (viewport_pyramids_dir).iterdir() if d.is_dir() and d.name not in ['satellite', 'rgb']]
         print(f"\nCreated Tessera pyramids for: {', '.join(sorted(years_created))}")
 
-        # Check for PCA
-        pca_dir = viewport_pyramids_dir / "pca"
-        if pca_dir.exists():
-            pca_years_created = [d.name for d in pca_dir.iterdir() if d.is_dir()]
-            print(f"Created PCA pyramids for: {', '.join(sorted(pca_years_created))}")
+        # Check for RGB
+        rgb_dir = viewport_pyramids_dir / "rgb"
+        if rgb_dir.exists():
+            rgb_years_created = [d.name for d in rgb_dir.iterdir() if d.is_dir()]
+            print(f"Created RGB pyramids for: {', '.join(sorted(rgb_years_created))}")
 
         # Calculate total size
         total_size = sum(f.stat().st_size for f in viewport_pyramids_dir.rglob("*.tif"))
