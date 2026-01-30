@@ -156,7 +156,10 @@ def trigger_data_download_and_processing(viewport_name, years=None):
             if years:
                 years_str = ','.join(str(y) for y in years)
                 logger.info(f"[PIPELINE] STAGE 1/4: Downloading embeddings for '{viewport_name}' (years: {years_str})...")
+                logger.info(f"[PIPELINE]   Calling: python download_embeddings.py --years {years_str}")
                 result = run_script('download_embeddings.py', '--years', years_str, timeout=1800)
+                logger.info(f"[PIPELINE]   Script stdout: {result.stdout[:500] if result.stdout else '(empty)'}")
+                logger.info(f"[PIPELINE]   Script stderr: {result.stderr[:500] if result.stderr else '(empty)'}")
             else:
                 logger.info(f"[PIPELINE] STAGE 1/4: Downloading embeddings for '{viewport_name}' (all available years)...")
                 result = run_script('download_embeddings.py', timeout=1800)
@@ -446,6 +449,7 @@ def api_create_viewport():
 
         # Get selected years
         years = data.get('years')  # Will be list of integers or None
+        logger.info(f"[NEW VIEWPORT] API received years: {years} (type: {type(years).__name__})")
 
         # Create viewport
         create_viewport_from_bounds(name, bounds, description)
@@ -455,7 +459,7 @@ def api_create_viewport():
         viewport['name'] = name
 
         # Automatically trigger data download and processing for new viewport
-        logger.info(f"[NEW VIEWPORT] Triggering data download for new viewport '{name}'...")
+        logger.info(f"[NEW VIEWPORT] Triggering data download for new viewport '{name}' with years={years}...")
         trigger_data_download_and_processing(name, years=years)
 
         return jsonify({

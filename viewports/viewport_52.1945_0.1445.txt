@@ -1,0 +1,20 @@
+Viewport Configuration
+=====================
+
+Viewport ID: viewport_52.1945_0.1445
+
+Center (degrees):
+  Latitude:  52.1945°
+  Longitude: 0.1445°
+
+Bounds (degrees):
+  Min Latitude:  52.1720°
+  Max Latitude:  52.2169°
+  Min Longitude: 0.1079°
+  Max Longitude: 0.1812°
+
+Size: 5km × 5km
+
+Description: 5km × 5km
+
+Generated: 2026-01-30T17:39:06.515528
