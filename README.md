@@ -1,10 +1,10 @@
-# Blore: Multi-Year Tessera Embeddings Viewer
+# TEE: Tessera Embeddings Explorer
 
 A comprehensive system for downloading, processing, and visualizing Sentinel-2 satellite embeddings across multiple years (2017-2024) with an interactive web interface for geographic viewports.
 
 ## Overview
 
-Blore integrates geospatial data processing with deep learning embeddings to create an interactive platform for exploring satellite imagery over time. The system:
+TEE (Tessera Embeddings Explorer) integrates geospatial data processing with deep learning embeddings to create an interactive platform for exploring satellite imagery over time. The system:
 
 - **Downloads** Tessera embeddings from GeoTessera for multiple years
 - **Processes** embeddings into RGB visualizations and pyramid structures
@@ -364,8 +364,8 @@ For issues or questions:
 If you use this project in research, please cite:
 
 ```bibtex
-@software{blore2024,
-  title={Blore: Multi-Year Tessera Embeddings Viewer},
+@software{tee2024,
+  title={TEE: Tessera Embeddings Explorer},
   author={Your Name},
   year={2024},
   url={https://github.com/sk818/TEE}
