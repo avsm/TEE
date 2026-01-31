@@ -1,6 +1,7 @@
-# Ignore active viewport selection (user-specific)
+# Ignore active viewport selection and user-created viewports
 viewport.txt
 .active
+*.txt
 
 # Track preset viewports
 !tile_aligned.txt
