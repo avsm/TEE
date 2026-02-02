@@ -379,6 +379,10 @@
                 <span>Temporal Distance Heatmap</span>
             </div>
             <div id="map-heatmap" class="map"></div>
+            <!-- Message when years are the same -->
+            <div id="heatmap-same-year-message" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); color: white; padding: 20px 30px; border-radius: 8px; font-size: 14px; z-index: 1000; white-space: nowrap; display: none;">
+                Select different years in panels 3 and 6
+            </div>
         </div>
 
         <!-- Panel 6: Second Year Embeddings -->
@@ -2817,8 +2821,32 @@
             });
         }
 
+        // Update heatmap message visibility based on year comparison
+        function updateHeatmapMessage() {
+            const messageDiv = document.getElementById('heatmap-same-year-message');
+            if (!messageDiv) return;
+
+            if (currentEmbeddingYear === currentEmbeddingYear2) {
+                // Years are the same - show message
+                messageDiv.style.display = 'block';
+                console.log(`[HEATMAP] Years are the same (${currentEmbeddingYear}), showing message`);
+            } else {
+                // Years are different - hide message and load heatmap
+                messageDiv.style.display = 'none';
+                console.log(`[HEATMAP] Years differ (${currentEmbeddingYear} vs ${currentEmbeddingYear2}), loading heatmap`);
+            }
+        }
+
         // Load distance heatmap for Panel 5
         async function loadHeatmap() {
+            // Check if years are the same and show/hide message
+            updateHeatmapMessage();
+
+            // If years are the same, don't load heatmap
+            if (currentEmbeddingYear === currentEmbeddingYear2) {
+                return;
+            }
+
             try {
                 const zoom = maps.heatmap.getZoom();
                 console.log(`[HEATMAP] Computing distance heatmap for ${currentViewportName} (${currentEmbeddingYear} vs ${currentEmbeddingYear2}) at zoom ${zoom}...`);
