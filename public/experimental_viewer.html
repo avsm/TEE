@@ -678,9 +678,8 @@
                         if (panel === 'embedding') {
                             explorerClick(e.latlng.lat, e.latlng.lng);
                         } else if (panel === 'rgb') {
-                            // Old behavior: add marker only for RGB panel
-                            const label = document.getElementById('label-input')?.value || 'unlabeled';
-                            addMarker(panel, e.latlng.lat, e.latlng.lng, label);
+                            // Highlight location in UMAP
+                            highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
                         }
                     }
                 });
@@ -1743,9 +1742,6 @@
 
                 // Step 4: Visualize with current threshold
                 updateExplorerVisualization();
-
-                // Step 5: Highlight source pixel in UMAP
-                highlightUMAPPoint(lat, lon);
 
             } catch (error) {
                 console.error('[EXPLORER] Error:', error);
