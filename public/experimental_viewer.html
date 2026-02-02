@@ -679,6 +679,7 @@
                         }
 
                         // Click on embedding map triggers similarity search
+                        console.log(`[CLICK] Checking panel type: panel="${panel}"`);
                         if (panel === 'embedding') {
                             console.log(`[CLICK] Panel 3 (embeddings) at ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
                             explorerClick(e.latlng.lat, e.latlng.lng);
@@ -686,6 +687,8 @@
                             console.log(`[CLICK] Panel 2 (Bing maps) at ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
                             // Bing maps (Panel 2): Highlight location in UMAP
                             highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
+                        } else {
+                            console.log(`[CLICK] Unhandled panel type: ${panel}`);
                         }
                     }
                 });
