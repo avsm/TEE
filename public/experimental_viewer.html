@@ -758,7 +758,7 @@
         }
 
         // Switch to different embedding year
-        function switchEmbeddingYear(year) {
+        async function switchEmbeddingYear(year) {
             console.log(`📅 Switching to year ${year}`);
             currentEmbeddingYear = year.toString();
 
@@ -781,6 +781,12 @@
 
             window.embeddingLayer.addTo(maps.embedding);
             console.log(`✓ Switched to year ${year}`);
+
+            // Reload UMAP for the new year (Panel 4)
+            if (umapCanvasLayer) {
+                console.log(`🔄 Reloading UMAP for year ${year}`);
+                await loadUMAP();
+            }
 
             // Update heatmap (compares Panel 3 and Panel 6)
             if (heatmapCanvasLayer) {
@@ -2777,6 +2783,11 @@
                     console.log(`[UMAP] Adding canvas layer to map...`);
                     umapCanvasLayer.addTo(maps.umap);
                     console.log(`✓ UMAP rendered: ${data.num_points} points`);
+                    // Apply saved labels to UMAP visualization
+                    if (savedLabels && savedLabels.length > 0) {
+                        umapCanvasLayer.updateLabelColors(savedLabels);
+                        console.log(`[UMAP] Applied ${savedLabels.length} labels to visualization`);
+                    }
                     umapCanvasLayer.loadRGBColors().catch(() => {});
                 } else {
                     console.error(`[UMAP] Error: ${data.error}`);
