@@ -2523,11 +2523,11 @@
                     this.ctx.fill();
                     this.ctx.stroke();
 
-                    // Triangle point pointing down
+                    // Triangle point - narrow tip at bottom pointing to highlighted location
                     this.ctx.beginPath();
-                    this.ctx.moveTo(canvasX, canvasY + 8);
-                    this.ctx.lineTo(canvasX - 6, canvasY + 16);
-                    this.ctx.lineTo(canvasX + 6, canvasY + 16);
+                    this.ctx.moveTo(canvasX - 8, canvasY - 10);  // Left side of wide base
+                    this.ctx.lineTo(canvasX + 8, canvasY - 10);  // Right side of wide base
+                    this.ctx.lineTo(canvasX, canvasY + 18);      // Narrow tip pointing down at point
                     this.ctx.closePath();
                     this.ctx.fill();
                     this.ctx.stroke();
