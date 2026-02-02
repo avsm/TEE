@@ -679,16 +679,11 @@
                         }
 
                         // Click on embedding map triggers similarity search
-                        console.log(`[CLICK] Checking panel type: panel="${panel}"`);
                         if (panel === 'embedding') {
-                            console.log(`[CLICK] Panel 3 (embeddings) at ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
                             explorerClick(e.latlng.lat, e.latlng.lng);
                         } else if (panel === 'rgb') {
-                            console.log(`[CLICK] Panel 2 (Bing maps) at ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
                             // Bing maps (Panel 2): Highlight location in UMAP
                             highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
-                        } else {
-                            console.log(`[CLICK] Unhandled panel type: ${panel}`);
                         }
                     }
                 });
@@ -2925,21 +2920,23 @@
         // Handle click on UMAP canvas
         // Highlight a source point in the UMAP by lat/lon
         function highlightUMAPPoint(lat, lon) {
-            console.log(`[UMAP] highlightUMAPPoint called: lat=${lat.toFixed(6)}, lon=${lon.toFixed(6)}`);
-            console.log(`[UMAP] umapData=${!!umapData}, maps.umap=${!!maps.umap}`);
+            if (!umapData || !maps.umap) return;
 
-            if (!umapData || !maps.umap) {
-                console.log('[UMAP] Missing data or map - returning');
-                return;
+            // Find the nearest UMAP point to clicked location
+            let nearest = null;
+            let minDist = Infinity;
+
+            for (const point of umapData) {
+                const dist = Math.pow(point.lat - lat, 2) + Math.pow(point.lon - lon, 2);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = point;
+                }
             }
 
-            // Find the UMAP point matching this lat/lon
-            let matchingPoint = umapData.find(p =>
-                Math.abs(p.lat - lat) < 0.0000001 && Math.abs(p.lon - lon) < 0.0000001
-            );
+            if (!nearest) return;
 
-            console.log(`[UMAP] Found matching point: ${!!matchingPoint}`);
-            if (!matchingPoint) return;
+            let matchingPoint = nearest;
 
             // Remove old marker if exists
             if (window.umapMarker) {
