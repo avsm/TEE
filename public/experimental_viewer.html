@@ -2627,6 +2627,7 @@
                 if (stats && stats.max_distance > 0) {
                     this.maxDistance = stats.max_distance;
                     console.log(`[HEATMAP] Using backend max distance: ${this.maxDistance.toFixed(3)}`);
+                    console.log(`[HEATMAP] Full stats from backend:`, stats);
                 } else {
                     // Fallback: calculate maxDistance locally without spread operator
                     let maxDist = 0;
@@ -2637,6 +2638,12 @@
                     }
                     this.maxDistance = maxDist > 0 ? maxDist : 1;
                     console.log(`[HEATMAP] Calculated local max distance: ${this.maxDistance.toFixed(3)}`);
+                }
+
+                // Sample and log distance values for debugging
+                if (distances && distances.length > 0) {
+                    const sampleDistances = distances.slice(0, 5).map(d => d.distance.toFixed(3));
+                    console.log(`[HEATMAP] Sample distances (first 5): [${sampleDistances.join(', ')}]`);
                 }
             }
 
