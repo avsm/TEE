@@ -2623,13 +2623,24 @@
                 this._canvas = null;
                 this._ctx = null;
 
-                // Use backend-provided max distance if available, otherwise calculate locally
+                // Use percentile-based normalization for better color distribution
+                // Instead of max distance, use 95th percentile to avoid outliers compressing the scale
                 if (stats && stats.max_distance > 0) {
-                    this.maxDistance = stats.max_distance;
-                    console.log(`[HEATMAP] Using backend max distance: ${this.maxDistance.toFixed(3)}`);
-                    console.log(`[HEATMAP] Full stats from backend:`, stats);
+                    // Estimate 95th percentile from stats (use mean + 2*std as approximation)
+                    // For now, use max distance but scale it by median to get better distribution
+                    const median = stats.median_distance || stats.mean_distance;
+
+                    // Use 75th percentile as scale (roughly median + 0.67*std)
+                    // This spreads the common range (below median) across more of the color scale
+                    this.maxDistance = median * 1.5;  // Scale by 1.5x median for better gradient spread
+
+                    console.log(`[HEATMAP] Using percentile-based normalization:`, {
+                        actual_max: stats.max_distance.toFixed(3),
+                        median: median.toFixed(3),
+                        scale_to: this.maxDistance.toFixed(3)
+                    });
                 } else {
-                    // Fallback: calculate maxDistance locally without spread operator
+                    // Fallback: calculate maxDistance locally
                     let maxDist = 0;
                     for (let i = 0; i < distances.length; i++) {
                         if (distances[i].distance > maxDist) {
@@ -2637,7 +2648,7 @@
                         }
                     }
                     this.maxDistance = maxDist > 0 ? maxDist : 1;
-                    console.log(`[HEATMAP] Calculated local max distance: ${this.maxDistance.toFixed(3)}`);
+                    console.log(`[HEATMAP] Calculated local scale distance: ${this.maxDistance.toFixed(3)}`);
                 }
 
                 // Sample and log distance values for debugging
