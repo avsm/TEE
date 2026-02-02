@@ -2688,7 +2688,7 @@
                     // Skip off-screen pixels
                     if (x + width < 0 || x > size.x || y + height < 0 || y > size.y) continue;
 
-                    // Color gradient: blue (0) -> green -> yellow -> red (max)
+                    // Viridis color gradient: purple/blue (0) -> green -> yellow (max)
                     const normalized = d.distance / this.maxDistance;
                     const color = this.getHeatmapColor(normalized);
                     colors.add(color);
@@ -2704,30 +2704,33 @@
             }
 
             getHeatmapColor(value) {
-                // value: 0 (blue) -> 1 (red)
-                // Use HSL color space for smooth gradient: blue (240°) -> red (0°)
-                const hue = 240 * (1 - value);  // 240° (blue) to 0° (red)
-                const saturation = 100;
-                const lightness = 50;
+                // Viridis colormap - perceptually uniform
+                // value: 0 (dark purple/blue) -> 0.5 (green) -> 1.0 (bright yellow)
+                // Based on https://viridis.scijs.org/
 
-                // Convert HSL to RGB
-                const c = (1 - Math.abs(2 * (lightness / 100) - 1)) * (saturation / 100);
-                const h = hue / 60;
-                const x = c * (1 - Math.abs(h % 2 - 1));
+                const viridis = [
+                    [68, 1, 84],      // 0.00: dark purple
+                    [72, 40, 120],    // 0.17
+                    [62, 74, 137],    // 0.33: blue
+                    [47, 105, 141],   // 0.50: teal
+                    [39, 133, 133],   // 0.67: cyan-green
+                    [92, 156, 89],    // 0.83: green
+                    [181, 172, 39],   // 1.00: yellow
+                ];
 
-                let r = 0, g = 0, b = 0;
+                // Normalize value to viridis array index (0-6)
+                const idx = value * (viridis.length - 1);
+                const lowerIdx = Math.floor(idx);
+                const upperIdx = Math.ceil(idx);
+                const fraction = idx - lowerIdx;
 
-                if (h < 1) { r = c; g = x; b = 0; }
-                else if (h < 2) { r = x; g = c; b = 0; }
-                else if (h < 3) { r = 0; g = c; b = x; }
-                else if (h < 4) { r = 0; g = x; b = c; }
-                else if (h < 5) { r = x; g = 0; b = c; }
-                else { r = c; g = 0; b = x; }
+                // Interpolate between two nearest colors
+                const lower = viridis[Math.min(lowerIdx, viridis.length - 1)];
+                const upper = viridis[Math.min(upperIdx, viridis.length - 1)];
 
-                const m = (lightness / 100) - c / 2;
-                r = Math.floor((r + m) * 255);
-                g = Math.floor((g + m) * 255);
-                b = Math.floor((b + m) * 255);
+                const r = Math.floor(lower[0] * (1 - fraction) + upper[0] * fraction);
+                const g = Math.floor(lower[1] * (1 - fraction) + upper[1] * fraction);
+                const b = Math.floor(lower[2] * (1 - fraction) + upper[2] * fraction);
 
                 return `rgb(${r}, ${g}, ${b})`;
             }
