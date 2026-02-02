@@ -787,9 +787,9 @@
             if (umapCanvasLayer) {
                 console.log(`🔄 Reloading UMAP for year ${year}`);
                 // Clear old UMAP highlight before reloading
-                if (window.umapMarker) {
-                    maps.umap.removeLayer(window.umapMarker);
-                    window.umapMarker = null;
+                if (umapCanvasLayer) {
+                    umapCanvasLayer.highlightedPoint = null;
+                    umapCanvasLayer.redraw();
                 }
                 await loadUMAP();
             }
@@ -1626,9 +1626,9 @@
             explorerResults = null;
 
             // Clear UMAP highlight marker
-            if (window.umapMarker) {
-                maps.umap.removeLayer(window.umapMarker);
-                window.umapMarker = null;
+            if (umapCanvasLayer) {
+                umapCanvasLayer.highlightedPoint = null;
+                umapCanvasLayer.redraw();
             }
 
             // Clear search cache for persistent labels
@@ -2432,6 +2432,7 @@
                 this.ctx = null;
                 this.labelColors = new Map();  // lat,lon -> label color (overrides RGB)
                 this.rgbColors = new Map();    // lat,lon -> RGB color (default)
+                this.highlightedPoint = null;  // Currently highlighted point
             }
 
             addTo(map) {
@@ -2504,6 +2505,18 @@
                     this.ctx.beginPath();
                     this.ctx.arc(canvasX, canvasY, 2, 0, 2 * Math.PI);
                     this.ctx.fill();
+                }
+
+                // Draw highlight circle if a point is selected
+                if (this.highlightedPoint) {
+                    const canvasX = padding + (this.highlightedPoint.x - this.xMin) * scaleX;
+                    const canvasY = size.y - (padding + (this.highlightedPoint.y - this.yMin) * scaleY);
+
+                    this.ctx.strokeStyle = '#FFD700';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.beginPath();
+                    this.ctx.arc(canvasX, canvasY, 8, 0, 2 * Math.PI);
+                    this.ctx.stroke();
                 }
             }
 
@@ -2936,26 +2949,9 @@
 
             if (!nearest) return;
 
-            let matchingPoint = nearest;
-
-            // Remove old marker if exists
-            if (window.umapMarker) {
-                maps.umap.removeLayer(window.umapMarker);
-            }
-
-            // Add new marker at UMAP coordinates (using x, y as lat, lon on the UMAP map)
-            window.umapMarker = L.circleMarker([matchingPoint.y, matchingPoint.x], {
-                radius: 6,
-                color: '#FFD700',
-                fillColor: '#FFD700',
-                fillOpacity: 0.4,
-                weight: 2
-            }).addTo(maps.umap);
-
-            // Pan to the marker and set zoom level to show it
-            maps.umap.setView([matchingPoint.y, matchingPoint.x], 1);
-
-            console.log(`[UMAP] Marked source pixel at UMAP coords (${matchingPoint.x.toFixed(2)}, ${matchingPoint.y.toFixed(2)})`);
+            // Store highlighted point in canvas layer and redraw
+            umapCanvasLayer.highlightedPoint = nearest;
+            umapCanvasLayer.redraw();
         }
 
         // Show distance at a point in heatmap
