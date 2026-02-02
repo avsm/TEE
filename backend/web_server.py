@@ -148,8 +148,13 @@ def trigger_data_download_and_processing(viewport_name, years=None):
 
     Satellite data uses Bing/Esri imagery (not downloaded locally).
     """
+    operation_id = f"{viewport_name}_full_pipeline"
+
     def download_and_process():
         try:
+            with tasks_lock:
+                tasks[operation_id] = {'status': 'starting', 'current_stage': 'initialization', 'error': None}
+
             project_root = Path(__file__).parent.parent
             logger.info(f"[PIPELINE] Starting preprocessing for viewport '{viewport_name}' (years: {years})...")
 
@@ -158,6 +163,9 @@ def trigger_data_download_and_processing(viewport_name, years=None):
             set_active_viewport(viewport_name)
 
             # ===== STAGE 1: Download embeddings =====
+            with tasks_lock:
+                tasks[operation_id]['current_stage'] = 'downloading_embeddings'
+
             if years:
                 years_str = ','.join(str(y) for y in years)
                 logger.info(f"[PIPELINE] STAGE 1/4: Downloading embeddings for '{viewport_name}' (years: {years_str})...")
@@ -169,7 +177,10 @@ def trigger_data_download_and_processing(viewport_name, years=None):
                 logger.info(f"[PIPELINE] STAGE 1/4: Downloading embeddings for '{viewport_name}' (all available years)...")
                 result = run_script('download_embeddings.py', timeout=1800)
             if result.returncode != 0:
-                logger.error(f"[PIPELINE] ✗ Stage 1 failed - Embeddings download:\n{result.stderr}")
+                error_msg = f"Stage 1 failed - Embeddings download:\n{result.stderr}"
+                logger.error(f"[PIPELINE] ✗ {error_msg}")
+                with tasks_lock:
+                    tasks[operation_id] = {'status': 'failed', 'current_stage': 'downloading_embeddings', 'error': error_msg}
                 return
 
             # Verify embeddings file exists (check for any year)
@@ -184,10 +195,16 @@ def trigger_data_download_and_processing(viewport_name, years=None):
             logger.info(f"[PIPELINE] ✓ Stage 1 complete: Embeddings downloaded for {len(embedding_files)} year(s) ({embeddings_file.stat().st_size / (1024*1024):.1f} MB per file)")
 
             # ===== STAGE 2: Create RGB visualization =====
+            with tasks_lock:
+                tasks[operation_id]['current_stage'] = 'creating_rgb'
+
             logger.info(f"[PIPELINE] STAGE 2/4: Creating RGB visualization for '{viewport_name}'...")
             result = run_script('create_rgb_embeddings.py', timeout=1800)
             if result.returncode != 0:
-                logger.error(f"[PIPELINE] ✗ Stage 2 failed - RGB creation:\n{result.stderr}")
+                error_msg = f"Stage 2 failed - RGB creation:\n{result.stderr}"
+                logger.error(f"[PIPELINE] ✗ {error_msg}")
+                with tasks_lock:
+                    tasks[operation_id] = {'status': 'failed', 'current_stage': 'creating_rgb', 'error': error_msg}
                 return
 
             # Verify RGB file exists and is properly written (check for any year)
@@ -203,10 +220,16 @@ def trigger_data_download_and_processing(viewport_name, years=None):
             logger.info(f"[PIPELINE] ✓ Stage 2 complete: RGB visualization created ({rgb_file.stat().st_size / (1024*1024):.1f} MB)")
 
             # ===== STAGE 3: Create pyramids =====
+            with tasks_lock:
+                tasks[operation_id]['current_stage'] = 'creating_pyramids'
+
             logger.info(f"[PIPELINE] STAGE 3/4: Creating pyramids for '{viewport_name}'...")
             result = run_script('create_pyramids.py', timeout=1800)
             if result.returncode != 0:
-                logger.error(f"[PIPELINE] ✗ Stage 3 failed - Pyramid creation:\n{result.stderr}")
+                error_msg = f"Stage 3 failed - Pyramid creation:\n{result.stderr}"
+                logger.error(f"[PIPELINE] ✗ {error_msg}")
+                with tasks_lock:
+                    tasks[operation_id] = {'status': 'failed', 'current_stage': 'creating_pyramids', 'error': error_msg}
                 return
 
             # Verify pyramid files exist (check for any year)
@@ -241,10 +264,16 @@ def trigger_data_download_and_processing(viewport_name, years=None):
             logger.info(f"[PIPELINE] ✓ Stage 3 complete: Pyramids created ({len(pyramid_levels)} levels for {pyramid_year_dir.name})")
 
             # ===== STAGE 4: Create FAISS index =====
+            with tasks_lock:
+                tasks[operation_id]['current_stage'] = 'creating_faiss'
+
             logger.info(f"[PIPELINE] STAGE 4/4: Creating FAISS index for '{viewport_name}'...")
             result = run_script('create_faiss_index.py', timeout=1800)
             if result.returncode != 0:
-                logger.error(f"[PIPELINE] ✗ Stage 4 failed - FAISS index creation:\n{result.stderr}")
+                error_msg = f"Stage 4 failed - FAISS index creation:\n{result.stderr}"
+                logger.error(f"[PIPELINE] ✗ {error_msg}")
+                with tasks_lock:
+                    tasks[operation_id] = {'status': 'failed', 'current_stage': 'creating_faiss', 'error': error_msg}
                 return
 
             # Verify FAISS index files exist (year-specific - look for any year with FAISS)
@@ -272,11 +301,19 @@ def trigger_data_download_and_processing(viewport_name, years=None):
                 logger.info(f"[PIPELINE] ✓ Stage 4 complete: All FAISS index files created")
 
             logger.info(f"[PIPELINE] ✓✓✓ SUCCESS: All 4 stages complete for viewport '{viewport_name}' ✓✓✓")
+            with tasks_lock:
+                tasks[operation_id] = {'status': 'success', 'current_stage': 'complete', 'error': None}
 
         except subprocess.TimeoutExpired:
-            logger.error(f"[PIPELINE] ✗ Timeout during preprocessing for '{viewport_name}'")
+            error_msg = f"Timeout during preprocessing"
+            logger.error(f"[PIPELINE] ✗ {error_msg} for '{viewport_name}'")
+            with tasks_lock:
+                tasks[operation_id] = {'status': 'failed', 'current_stage': 'timeout', 'error': error_msg}
         except Exception as e:
-            logger.error(f"[PIPELINE] ✗ Error during preprocessing for '{viewport_name}': {e}", exc_info=True)
+            error_msg = f"Error during preprocessing: {str(e)}"
+            logger.error(f"[PIPELINE] ✗ {error_msg} for '{viewport_name}'", exc_info=True)
+            with tasks_lock:
+                tasks[operation_id] = {'status': 'failed', 'current_stage': 'exception', 'error': error_msg}
 
     thread = threading.Thread(target=download_and_process, daemon=True)
     thread.start()
@@ -825,6 +862,31 @@ def api_operations_progress(operation_id):
 
     except Exception as e:
         logger.error(f"Error getting operation progress: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/operations/pipeline-status/<viewport_name>', methods=['GET'])
+def api_pipeline_status(viewport_name):
+    """Get status of viewport pipeline processing."""
+    try:
+        operation_id = f"{viewport_name}_full_pipeline"
+        with tasks_lock:
+            if operation_id in tasks:
+                status_info = tasks[operation_id]
+                return jsonify({
+                    'success': True,
+                    'operation_id': operation_id,
+                    **status_info
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'status': 'no_pipeline',
+                    'message': 'No pipeline operation found for this viewport'
+                }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting pipeline status: {e}")
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
