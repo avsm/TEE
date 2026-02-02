@@ -1041,19 +1041,15 @@ def api_is_viewport_ready(viewport_name):
                     has_faiss = True
                     break
 
-        # Determine readiness and message
-        is_ready = has_embeddings and has_pyramids and has_faiss
+        # Determine readiness: can view if pyramids exist (FAISS is optional for initial view)
+        is_ready = has_pyramids
 
         if is_ready:
             message = "✓ Ready to view!"
         elif not has_embeddings:
             message = "⏳ Downloading embeddings..."
-        elif not has_pyramids:
-            message = "⏳ Creating pyramids..."
-        elif not has_faiss:
-            message = "⏳ Building FAISS index..."
         else:
-            message = "⏳ Processing..."
+            message = "⏳ Creating pyramids..."
 
         return jsonify({
             'ready': is_ready,

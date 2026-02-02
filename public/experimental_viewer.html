@@ -321,7 +321,7 @@
             <div id="map-rgb" class="map"></div>
 
             <!-- Persistent Label Controls - Compact Bottom Bar -->
-            <div id="label-controls-bar" style="position: absolute; bottom: 10px; left: 10px; right: 10px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 8px; padding: 12px 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000; font-size: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <div id="label-controls-bar" style="position: absolute; bottom: 10px; left: 10px; right: 10px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 8px; padding: 12px 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000; font-size: 12px; display: none; gap: 10px; align-items: center; flex-wrap: wrap;">
               <!-- Save Button -->
               <button id="save-label-btn" style="padding: 8px 12px; background: #667eea; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 12px; white-space: nowrap;" disabled>
                 💾 Save as Label
@@ -2933,6 +2933,33 @@
 
         // ===== END UMAP AND HEATMAP FUNCTIONS =====
 
+        // Poll for FAISS index and show labeling controls when available
+        function startFAISSPolling() {
+            const checkFAISS = async () => {
+                try {
+                    const response = await fetch(`/api/viewports/${currentViewportName}/available-years`);
+                    const data = await response.json();
+                    if (data.success && data.years && data.years.length > 0) {
+                        // Check if FAISS index exists for any year
+                        const faissCheckResp = await fetch(`/api/viewports/${currentViewportName}/is-ready`);
+                        const faissStatus = await faissCheckResp.json();
+                        if (faissStatus.has_faiss) {
+                            // FAISS is ready - show labeling controls
+                            document.getElementById('label-controls-bar').style.display = 'flex';
+                            console.log('[ADVANCED VIEWER] FAISS index available - labeling enabled');
+                            return; // Stop polling
+                        }
+                    }
+                    // FAISS not ready yet, poll again
+                    setTimeout(checkFAISS, 2000);
+                } catch (error) {
+                    // Poll again on error
+                    setTimeout(checkFAISS, 2000);
+                }
+            };
+            checkFAISS();
+        }
+
         // Initialize
         window.onload = async function() {
             // Load viewport info first (determines map center/zoom)
@@ -2950,6 +2977,9 @@
             loadLabels();
             await loadSavedLabels();  // Load persistent labels from server
             updateThresholdDisplay();  // Initialize threshold display
+
+            // Poll for FAISS index and show labeling controls when ready
+            startFAISSPolling();
 
             // Initialize new panels
             await loadUMAP();             // Panel 4: UMAP visualization
