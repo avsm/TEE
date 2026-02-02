@@ -1625,6 +1625,10 @@
             explorerResults = null;
 
             // Clear UMAP highlight marker
+            if (umapCanvasLayer) {
+                umapCanvasLayer.sourcePixelPoint = null;
+                umapCanvasLayer.redraw();
+            }
             if (window.umapHighlightMarker) {
                 try {
                     window.umapHighlightMarker.remove();
@@ -2438,6 +2442,7 @@
                 this.ctx = null;
                 this.labelColors = new Map();  // lat,lon -> label color (overrides RGB)
                 this.rgbColors = new Map();    // lat,lon -> RGB color (default)
+                this.sourcePixelPoint = null;  // Highlight marker for source pixel
             }
 
             addTo(map) {
@@ -2510,6 +2515,27 @@
                     this.ctx.beginPath();
                     this.ctx.arc(canvasX, canvasY, 2, 0, 2 * Math.PI);
                     this.ctx.fill();
+                }
+
+                // Draw highlight marker for source pixel if set
+                if (this.sourcePixelPoint) {
+                    const canvasX = padding + (this.sourcePixelPoint.x - this.xMin) * scaleX;
+                    const canvasY = size.y - (padding + (this.sourcePixelPoint.y - this.yMin) * scaleY);
+
+                    // Draw gold circle with border
+                    this.ctx.strokeStyle = '#FFD700';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.beginPath();
+                    this.ctx.arc(canvasX, canvasY, 6, 0, 2 * Math.PI);
+                    this.ctx.stroke();
+
+                    // Draw inner highlight
+                    this.ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+                    this.ctx.beginPath();
+                    this.ctx.arc(canvasX, canvasY, 6, 0, 2 * Math.PI);
+                    this.ctx.fill();
+
+                    console.log(`[UMAP] Drew highlight at canvas (${canvasX.toFixed(0)}, ${canvasY.toFixed(0)})`);
                 }
             }
 
@@ -2926,61 +2952,58 @@
         // Handle click on UMAP canvas
         // Highlight a source point in the UMAP by lat/lon
         function highlightUMAPPoint(lat, lon) {
+            console.log(`[UMAP] Trying to highlight point at lat=${lat.toFixed(6)}, lon=${lon.toFixed(6)}`);
             if (!umapCanvasLayer || !umapData) {
                 console.log('[UMAP] No UMAP data available for highlighting');
                 return;
             }
 
+            console.log(`[UMAP] UMAP has ${umapData.length} points, searching...`);
+
             // Find the UMAP point matching this lat/lon
             let matchingPoint = null;
-            for (const point of umapData) {
-                if (Math.abs(point.lat - lat) < 0.000001 && Math.abs(point.lon - lon) < 0.000001) {
+            for (let i = 0; i < umapData.length; i++) {
+                const point = umapData[i];
+                const latDiff = Math.abs(point.lat - lat);
+                const lonDiff = Math.abs(point.lon - lon);
+
+                // Use exact match (should be exact from the same data)
+                if (latDiff < 0.0000001 && lonDiff < 0.0000001) {
                     matchingPoint = point;
+                    console.log(`[UMAP] Found matching point at index ${i}: lat=${point.lat.toFixed(6)}, lon=${point.lon.toFixed(6)}`);
                     break;
                 }
             }
 
             if (!matchingPoint) {
-                console.log(`[UMAP] No matching point found for lat=${lat}, lon=${lon}`);
-                return;
-            }
-
-            // Remove previous highlight
-            if (window.umapHighlightMarker && umapCanvasLayer.map && umapCanvasLayer.map.hasLayer(window.umapHighlightMarker)) {
-                try {
-                    umapCanvasLayer.map.removeLayer(window.umapHighlightMarker);
-                } catch (e) {
-                    console.warn('Could not remove UMAP highlight:', e);
+                console.log(`[UMAP] No exact matching point found for lat=${lat.toFixed(6)}, lon=${lon.toFixed(6)}`);
+                // Try to find nearest point as fallback
+                let nearest = null;
+                let minDist = Infinity;
+                for (const point of umapData) {
+                    const dist = Math.pow(point.lat - lat, 2) + Math.pow(point.lon - lon, 2);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = point;
+                    }
+                }
+                if (nearest && minDist < 0.0001) {
+                    matchingPoint = nearest;
+                    console.log(`[UMAP] Using nearest point at distance ${Math.sqrt(minDist).toFixed(6)}`);
+                } else {
+                    return;
                 }
             }
 
-            // Get canvas position of the UMAP point
-            const size = maps.umap.getSize();
-            const padding = 50;
-            const scaleX = (size.x - 2 * padding) / (umapCanvasLayer.xMax - umapCanvasLayer.xMin);
-            const scaleY = (size.y - 2 * padding) / (umapCanvasLayer.yMax - umapCanvasLayer.yMin);
+            // Store the source pixel location in the UMAP layer
+            console.log(`[UMAP] Storing source pixel for visual highlight at UMAP coords (${matchingPoint.x.toFixed(2)}, ${matchingPoint.y.toFixed(2)})`);
 
-            const canvasX = padding + (matchingPoint.x - umapCanvasLayer.xMin) * scaleX;
-            const canvasY = size.y - (padding + (matchingPoint.y - umapCanvasLayer.yMin) * scaleY);
+            umapCanvasLayer.sourcePixelPoint = matchingPoint;
 
-            // Create marker as HTML overlay
-            const markerDiv = document.createElement('div');
-            markerDiv.style.position = 'absolute';
-            markerDiv.style.width = '12px';
-            markerDiv.style.height = '12px';
-            markerDiv.style.left = (canvasX - 6) + 'px';
-            markerDiv.style.top = (canvasY - 6) + 'px';
-            markerDiv.style.border = '2px solid #FFD700';
-            markerDiv.style.borderRadius = '50%';
-            markerDiv.style.backgroundColor = 'transparent';
-            markerDiv.style.pointerEvents = 'none';
-            markerDiv.style.zIndex = '1000';
+            // Trigger redraw to show highlight
+            umapCanvasLayer.redraw();
 
-            const umapContainer = document.getElementById('map-umap');
-            umapContainer.appendChild(markerDiv);
-
-            window.umapHighlightMarker = markerDiv;
-            console.log(`[UMAP] Highlighted point at UMAP coords (${matchingPoint.x.toFixed(2)}, ${matchingPoint.y.toFixed(2)})`);
+            console.log(`[UMAP] Source pixel marked in UMAP`);
         }
 
         // Show distance at a point in heatmap
