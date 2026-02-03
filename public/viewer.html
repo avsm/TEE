@@ -2217,10 +2217,11 @@
             // Load viewport info first (determines map center/zoom)
             await updateMapViewport();
 
-            // Start polling for any ongoing operations
-            if (currentViewportName) {
-                checkAndPollOperations(currentViewportName);
-            }
+            // NOTE: Don't poll for operations here - viewer already has usable data.
+            // Any additional years being processed (embeddings, pyramids, FAISS) should
+            // happen silently in the background without showing a progress bar that blocks
+            // the UI. User can already interact with the available year's data.
+            // Additional years will become available automatically as they complete.
 
             // Then create maps with correct viewport
             createMaps();
