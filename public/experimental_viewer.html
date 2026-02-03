@@ -2654,6 +2654,12 @@
                     // Use 75th percentile as scale (roughly median + 0.67*std)
                     // This spreads the common range (below median) across more of the color scale
                     this.maxDistance = median * 1.5;  // Scale by 1.5x median for better gradient spread
+
+                    console.log('Heatmap distance scale:', {
+                        actual_max: stats.max_distance.toFixed(3),
+                        median: median.toFixed(3),
+                        scale_to: this.maxDistance.toFixed(3)
+                    });
                 } else {
                     // Fallback: calculate maxDistance locally
                     let maxDist = 0;
