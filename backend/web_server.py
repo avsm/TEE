@@ -552,8 +552,9 @@ def run_download_process(task_id):
         def create_faiss_index():
             try:
                 # Check if FAISS index already exists for current viewport
-                viewport_id = get_active_viewport_name()
-                faiss_dir = FAISS_INDICES_DIR / viewport_id
+                # Use the viewport_name captured at the START of this function, not the active viewport
+                # (which may have changed if user switched viewports)
+                faiss_dir = FAISS_INDICES_DIR / viewport_name
                 metadata_file = faiss_dir / 'metadata.json'
 
                 if faiss_dir.exists() and metadata_file.exists():
