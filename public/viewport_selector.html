@@ -1064,10 +1064,13 @@
 
                 // Build status message
                 let message = '';
-                let ready = status.pyramids && status.faiss;
+                let ready = status.pyramids;  // Only pyramids required for viewing; FAISS is optional
 
-                if (status.pyramids && status.faiss) {
+                if (status.pyramids) {
                     message = `✅ Ready to view (${status.years_available.length} year${status.years_available.length !== 1 ? 's' : ''})`;
+                    if (!status.faiss) {
+                        message += ' - FAISS indexing in background...';
+                    }
                     statusEl.style.background = '#e8f5e9';
                     statusEl.style.color = '#2e7d32';
                 } else {
