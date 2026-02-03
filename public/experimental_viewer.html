@@ -623,7 +623,6 @@
                 clearTimeout(heatmapZoomTimeout);
                 heatmapZoomTimeout = setTimeout(() => {
                     if (heatmapCanvasLayer && heatmapCanvasLayer.distances && heatmapCanvasLayer.distances.length > 0) {
-                        console.log('[HEATMAP] Zoom changed, recomputing with new sampling...');
                         loadHeatmap();
                     }
                 }, 500);  // Debounce to avoid rapid recomputes
@@ -2656,7 +2655,6 @@
                     // This spreads the common range (below median) across more of the color scale
                     this.maxDistance = median * 1.5;  // Scale by 1.5x median for better gradient spread
 
-                    console.log(`[HEATMAP] Using percentile-based normalization:`, {
                         actual_max: stats.max_distance.toFixed(3),
                         median: median.toFixed(3),
                         scale_to: this.maxDistance.toFixed(3)
@@ -2670,13 +2668,11 @@
                         }
                     }
                     this.maxDistance = maxDist > 0 ? maxDist : 1;
-                    console.log(`[HEATMAP] Calculated local scale distance: ${this.maxDistance.toFixed(3)}`);
                 }
 
                 // Sample and log distance values for debugging
                 if (distances && distances.length > 0) {
                     const sampleDistances = distances.slice(0, 5).map(d => d.distance.toFixed(3));
-                    console.log(`[HEATMAP] Sample distances (first 5): [${sampleDistances.join(', ')}]`);
                 }
             }
 
@@ -2695,7 +2691,6 @@
 
                 this._ctx = this._canvas.getContext('2d');
 
-                console.log(`[HEATMAP] Canvas created: ${this.distances.length} distance points, maxDistance=${this.maxDistance.toFixed(3)}`);
 
                 map.on('move zoom resize', () => this._redraw());
                 this._redraw();
@@ -2758,13 +2753,10 @@
 
                 // Log detailed heatmap rendering info
                 if (pixelsDrawn > 0) {
-                    console.log(`[HEATMAP] Rendered: ${pixelsDrawn} pixels, ${colors.size} unique colors`);
                     if (colors.size > 0) {
                         const colorArray = Array.from(colors).slice(0, 5);
-                        console.log(`[HEATMAP] Sample colors: ${colorArray.join(', ')}`);
                     }
                 } else {
-                    console.warn(`[HEATMAP] WARNING: No pixels drawn! Canvas size: ${size.x}x${size.y}`);
                 }
             }
 
@@ -2902,11 +2894,9 @@
             if (currentEmbeddingYear === currentEmbeddingYear2) {
                 // Years are the same - show message
                 messageDiv.style.display = 'block';
-                console.log(`[HEATMAP] Years are the same (${currentEmbeddingYear}), showing message`);
             } else {
                 // Years are different - hide message and load heatmap
                 messageDiv.style.display = 'none';
-                console.log(`[HEATMAP] Years differ (${currentEmbeddingYear} vs ${currentEmbeddingYear2}), loading heatmap`);
             }
         }
 
@@ -2922,7 +2912,6 @@
 
             try {
                 const zoom = maps.heatmap.getZoom();
-                console.log(`[HEATMAP] Computing distance heatmap for ${currentViewportName} (${currentEmbeddingYear} vs ${currentEmbeddingYear2}) at zoom ${zoom}...`);
                 const response = await fetch('/api/embeddings/distance-heatmap', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -2953,10 +2942,8 @@
                         console.log(`✓ Heatmap loaded: ${data.distances.length} distances`);
                     }
                 } else {
-                    console.error(`[HEATMAP] Error: ${data.error}`);
                 }
             } catch (error) {
-                console.error('[HEATMAP] Error loading heatmap:', error);
             }
         }
 
