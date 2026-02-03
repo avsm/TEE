@@ -3119,8 +3119,11 @@
                 if (result.success) {
                     if (result.status === 'success') {
                         console.log(`[STATUS] ✓ ${viewportId} pipeline completed successfully`);
+                        // Clear any stale processing message
+                        hideProgressModal();
                     } else if (result.status === 'failed') {
                         console.error(`[STATUS] ✗ ${viewportId} pipeline failed: ${result.error}`);
+                        hideProgressModal();
                     } else if (result.status === 'in_progress') {
                         console.log(`[STATUS] ⏳ ${viewportId} still processing: ${result.current_stage}`);
                     }
