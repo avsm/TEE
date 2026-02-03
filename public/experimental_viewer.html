@@ -610,11 +610,7 @@
                 maxZoom: 17
             });
 
-            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Esri World Imagery',
-                opacity: 0.3,  // Dim background to see heatmap better
-                maxZoom: 18
-            }).addTo(maps.heatmap);
+            // No background layer for heatmap - pure color visualization
 
             if (viewportBounds) {
                 maps.heatmap.setMaxBounds(viewportBounds);
