@@ -54,7 +54,7 @@ def compute_umap(viewport_name, year):
             n_neighbors=15,
             min_dist=0.1,
             n_components=2,
-            n_jobs=1,
+            n_jobs=-1,
             verbose=False
         )
         umap_coords = reducer.fit_transform(embeddings)
