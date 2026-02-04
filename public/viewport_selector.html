@@ -747,24 +747,16 @@
                 }
             });
 
-            // Add mousemove handler to show preview (always follows mouse while form is open)
+            // Show preview following mouse only until a location is locked in by clicking
             map.on('mousemove', function(e) {
-                if (document.getElementById('createForm').classList.contains('open')) {
+                if (document.getElementById('createForm').classList.contains('open') && !pendingViewportBounds) {
                     showViewportPreview(e.latlng);
-                    // Keep pendingViewportBounds in sync so the box position matches what will be created
-                    if (pendingViewportBounds) {
-                        const offsets = kmToDegrees(VIEWPORT_SIZE_KM / 2, e.latlng.lat);
-                        pendingViewportBounds = {
-                            bounds: `${(e.latlng.lng - offsets.lngOffset).toFixed(6)},${(e.latlng.lat - offsets.latOffset).toFixed(6)},${(e.latlng.lng + offsets.lngOffset).toFixed(6)},${(e.latlng.lat + offsets.latOffset).toFixed(6)}`,
-                            autoName: pendingViewportBounds.autoName
-                        };
-                    }
                 }
             });
 
-            // Hide preview when mouse leaves map
+            // Hide preview on mouseout only if not yet locked (locked box stays visible)
             map.getContainer().addEventListener('mouseout', function() {
-                if (previewBox) {
+                if (previewBox && !pendingViewportBounds) {
                     map.removeLayer(previewBox);
                     previewBox = null;
                 }
@@ -906,6 +898,9 @@
                 autoName: `viewport_${latlng.lat.toFixed(4)}_${latlng.lng.toFixed(4)}`
             };
             console.log('[CREATE VIEWPORT] Bounds:', pendingViewportBounds.bounds);
+
+            // Always update the visual box to the clicked position
+            showViewportPreview(latlng);
 
             // Show the naming form only on first placement; subsequent clicks just reposition the box
             if (isFirstPlacement) {
