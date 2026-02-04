@@ -637,9 +637,10 @@
                             return;
                         }
 
-                        // Click on embedding map triggers similarity search
+                        // Click on embedding map triggers similarity search + UMAP highlight
                         if (panel === 'embedding') {
                             explorerClick(e.latlng.lat, e.latlng.lng);
+                            highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
                         } else if (panel === 'rgb') {
                             // Bing maps (Panel 2): Highlight location in UMAP
                             highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
