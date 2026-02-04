@@ -747,17 +747,11 @@
             window.embeddingLayer.addTo(maps.embedding);
             console.log(`✓ Switched to year ${year}`);
 
-            // Reload UMAP for the new year (Panel 4)
-            if (umapCanvasLayer) {
-                console.log(`🔄 Reloading UMAP for year ${year}`);
-                // Clear old UMAP highlight before reloading
-                umapCanvasLayer.setHighlight(null);
-                await loadUMAP();
+            // Update labels FIRST (fast, user sees immediate feedback)
+            if (savedLabels.length > 0) {
+                console.log(`🔄 Updating ${savedLabels.length} saved labels for year ${year}`);
+                await refreshLabelsForYear(year);
             }
-
-            // Update heatmap (compares Panel 3 and Panel 6)
-            // Always call loadHeatmap - it handles same-year case by showing message
-            loadHeatmap();
 
             // Re-run explorer search if one is active
             if (currentSearchCache && currentSearchCache.sourcePixel) {
@@ -766,10 +760,15 @@
                 explorerClick(sourcePixel.lat, sourcePixel.lon);
             }
 
-            // Update all saved labels for the new year
-            if (savedLabels.length > 0) {
-                console.log(`🔄 Updating ${savedLabels.length} saved labels for year ${year}`);
-                await refreshLabelsForYear(year);
+            // Fire off slower operations in background (don't block UI)
+            // Heatmap - async, no await
+            loadHeatmap();
+
+            // UMAP reload - async, no await (can take 30+ seconds if not cached)
+            if (umapCanvasLayer) {
+                console.log(`🔄 Reloading UMAP for year ${year} (background)`);
+                umapCanvasLayer.setHighlight(null);
+                loadUMAP();  // Don't await - let it run in background
             }
         }
 
