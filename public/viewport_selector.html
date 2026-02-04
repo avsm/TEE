@@ -587,8 +587,17 @@
                     <button class="btn btn-toggle" onclick="toggleCreateForm()">+ Create New Viewport</button>
 
                     <div class="create-form" id="createForm">
+                        <!-- Geocode search -->
+                        <div style="margin-bottom: 10px; position: relative;">
+                            <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 6px;">Search for a location</label>
+                            <input type="text" id="geocodeSearch" placeholder="e.g. London, Paris, Tokyo..." autocomplete="off"
+                                style="width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                            <div id="geocodeResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
+                            </div>
+                        </div>
+
                         <div id="mapClickInstruction" style="font-size: 12px; color: #333; margin-bottom: 12px; padding: 10px; background: #e8f4f8; border-radius: 6px; border-left: 3px solid #667eea;">
-                            📍 <strong>Click on the map</strong> to create a 5km × 5km viewport centered at that location
+                            📍 <strong>Or click on the map</strong> to create a 5km × 5km viewport centered at that location
                         </div>
                         <div id="formFields" style="display: none;">
                             <div class="form-group">
@@ -753,6 +762,94 @@
                     previewBox = null;
                 }
             });
+        }
+
+        // --- Geocode search (Nominatim) ---
+        let geocodeDebounceTimer = null;
+
+        function initGeocodeSearch() {
+            const input = document.getElementById('geocodeSearch');
+            input.addEventListener('input', function() {
+                clearTimeout(geocodeDebounceTimer);
+                const query = input.value.trim();
+                if (query.length < 2) {
+                    hideGeocodeResults();
+                    return;
+                }
+                geocodeDebounceTimer = setTimeout(() => fetchGeocode(query), 300);
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('#geocodeSearch') && !e.target.closest('#geocodeResults')) {
+                    hideGeocodeResults();
+                }
+            });
+        }
+
+        async function fetchGeocode(query) {
+            try {
+                const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
+                const response = await fetch(url, {
+                    headers: { 'User-Agent': 'Tessera Viewport Selector' }
+                });
+                const results = await response.json();
+                renderGeocodeResults(results);
+            } catch (error) {
+                console.error('[GEOCODE] Fetch failed:', error);
+                hideGeocodeResults();
+            }
+        }
+
+        function renderGeocodeResults(results) {
+            const container = document.getElementById('geocodeResults');
+            container.innerHTML = '';
+
+            if (!results || results.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+
+            results.forEach(result => {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px;';
+                div.style.whiteSpace = 'nowrap';
+                div.style.overflow = 'hidden';
+                div.style.textOverflow = 'ellipsis';
+
+                // Build label: name + address context
+                const name = result.name || result.display_name.split(',')[0];
+                const addr = result.address || {};
+                const context = [addr.city, addr.county, addr.state, addr.country].filter(Boolean).join(', ');
+                div.innerHTML = `<strong>${name}</strong>${context ? ' <span style="color:#666; font-weight:normal;">' + context + '</span>' : ''}`;
+
+                div.addEventListener('mouseenter', () => div.style.background = '#f0f7ff');
+                div.addEventListener('mouseleave', () => div.style.background = 'white');
+
+                div.addEventListener('click', () => selectGeocodeResult(result));
+                container.appendChild(div);
+            });
+
+            container.style.display = 'block';
+        }
+
+        function hideGeocodeResults() {
+            document.getElementById('geocodeResults').style.display = 'none';
+        }
+
+        function selectGeocodeResult(result) {
+            const lat = parseFloat(result.lat);
+            const lon = parseFloat(result.lon);
+
+            // Close dropdown and clear input
+            hideGeocodeResults();
+            document.getElementById('geocodeSearch').value = result.display_name.split(',').slice(0, 2).join(',').trim();
+
+            // Pan map to the selected location
+            map.setView([lat, lon], 12);
+
+            // Trigger the same flow as a map click
+            createViewportFromClick({ lat, lng: lon });
         }
 
         // Show preview of 5km × 5km viewport
@@ -1561,6 +1658,7 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
             }
 
             initMap();
+            initGeocodeSearch();
             loadCurrentViewport();
             loadViewports();
         });
