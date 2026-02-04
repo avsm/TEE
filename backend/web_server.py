@@ -1482,15 +1482,19 @@ def api_compute_umap(viewport_name):
                 'error': f'Error loading UMAP data: {str(e)}'
             }), 500
 
-        # Package result
+        # Package result (supports both 2D and 3D UMAP coords)
+        has_z = umap_coords.shape[1] >= 3
         points = []
         for i in range(len(lats)):
-            points.append({
+            point = {
                 'lat': float(lats[i]),
                 'lon': float(lons[i]),
                 'x': float(umap_coords[i, 0]),
                 'y': float(umap_coords[i, 1])
-            })
+            }
+            if has_z:
+                point['z'] = float(umap_coords[i, 2])
+            points.append(point)
 
         logger.info(f"[UMAP] ✓ Loaded pre-computed UMAP for {len(points):,} points")
         return jsonify({

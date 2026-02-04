@@ -53,7 +53,7 @@ def compute_umap(viewport_name, year):
         reducer = umap.UMAP(
             n_neighbors=15,
             min_dist=0.1,
-            n_components=2,
+            n_components=3,
             n_jobs=-1,
             verbose=False
         )
