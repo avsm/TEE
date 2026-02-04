@@ -3163,16 +3163,23 @@
         function updateOverlay() {
             if (!maps.rgb) return;
 
-            // Remove old overlay
-            if (labelOverlay && maps.rgb.hasLayer(labelOverlay)) {
-                maps.rgb.removeLayer(labelOverlay);
-            }
-
-            // Create new overlay with current labels
             const visibleLabels = savedLabels.filter(l => l.visible);
+
             if (visibleLabels.length > 0) {
-                labelOverlay = new PersistentLabelOverlay(savedLabels);
-                labelOverlay.addTo(maps.rgb);
+                // If overlay exists, update it in place (avoids remove/re-add timing issues)
+                if (labelOverlay && maps.rgb.hasLayer(labelOverlay)) {
+                    labelOverlay.updateLabels(savedLabels);
+                } else {
+                    // Create new overlay if it doesn't exist yet
+                    labelOverlay = new PersistentLabelOverlay(savedLabels);
+                    labelOverlay.addTo(maps.rgb);
+                }
+            } else {
+                // No visible labels - remove overlay if it exists
+                if (labelOverlay && maps.rgb.hasLayer(labelOverlay)) {
+                    maps.rgb.removeLayer(labelOverlay);
+                    labelOverlay = null;
+                }
             }
 
             // Update UMAP colors to match labels
