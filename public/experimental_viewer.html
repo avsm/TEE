@@ -640,7 +640,8 @@
                             setCrossPanelMarker('embedding2', e.latlng.lat, e.latlng.lng);
                             highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
                         } else if (panel === 'embedding') {
-                            // Panel 3: similarity search + markers on Panels 1 and 2 + UMAP highlight
+                            // Panel 3: clear any Panel 1 markers, then similarity search + marker on Panel 1 + UMAP highlight
+                            clearCrossPanelMarkers();
                             explorerClick(e.latlng.lat, e.latlng.lng);
                             setCrossPanelMarker('osm', e.latlng.lat, e.latlng.lng);
                             highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
