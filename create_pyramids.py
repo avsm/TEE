@@ -272,9 +272,12 @@ def main():
 
             # Use RGB file if available (already cropped and RGB), otherwise extract from embeddings
             if rgb_file_path.exists():
-                rgb_file = rgb_file_path
                 print(f"\nProcessing {rgb_file_path.name} (cropped RGB mosaic)...")
                 progress.update("processing", f"Creating pyramids for {year} (from RGB)...", current_file=f"embeddings_{year}")
+                # Upscale 3x for crisp pixel boundaries when zoomed in
+                rgb_temp_file = PYRAMIDS_BASE_DIR / f"temp_rgb_{year}.tif"
+                upscale_image(rgb_file_path, rgb_temp_file, upscale_factor=3)
+                rgb_file = rgb_temp_file
             elif tessera_file.exists():
                 print(f"\nProcessing {tessera_file.name}...")
                 progress.update("processing", f"Creating pyramids for {year}...", current_file=f"embeddings_{year}")
@@ -335,45 +338,6 @@ def main():
     else:
         print(f"\n⚠️  Satellite RGB file not found: {satellite_file}")
 
-    # Process RGB from embeddings (2017-2025)
-    print("\n" + "=" * 70)
-    print("Processing RGB Embeddings")
-    print("=" * 70)
-
-    for year in YEARS:
-        if viewport_id:
-            rgb_file = RGB_MOSAICS_DIR / f"{viewport_id}_{year}_rgb.tif"
-        else:
-            rgb_file = None
-
-        if not rgb_file or not rgb_file.exists():
-            print(f"\n⚠️  Skipping RGB {year}: File not found")
-            continue
-
-        # Create viewport-specific RGB directory
-        if viewport_id:
-            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport_id
-        else:
-            # Fallback: derive viewport name from RGB filename
-            rgb_stem = rgb_file.stem  # e.g., "bangalore_2024_rgb" -> "bangalore"
-            fallback_name = rgb_stem.split('_')[0] if '_' in rgb_stem else rgb_stem
-            print(f"⚠️  Warning: Could not determine viewport for RGB, using: {fallback_name}")
-            viewport_pyramids_dir = PYRAMIDS_BASE_DIR / fallback_name
-
-        rgb_pyramids_dir = viewport_pyramids_dir / "rgb"
-        rgb_pyramids_dir.mkdir(parents=True, exist_ok=True)
-
-        # Upscale RGB for better resolution
-        rgb_upscaled_file = rgb_pyramids_dir / f"{viewport_id}_{year}_rgb_upscaled.tif"
-        upscale_image(rgb_file, rgb_upscaled_file, upscale_factor=3)
-
-        # Create pyramids from upscaled RGB
-        rgb_year_dir = rgb_pyramids_dir / str(year)
-        create_pyramids_for_image(rgb_upscaled_file, rgb_year_dir, f"RGB {year}", upscale_factor=1)
-
-        # Clean up upscaled temp file
-        rgb_upscaled_file.unlink()
-
     print("\n" + "=" * 70)
     print("✅ Pyramid generation complete!")
     print(f"\nPyramids saved in:")
@@ -397,14 +361,8 @@ def main():
         print(f"  - {viewport_pyramids_dir.absolute()}")
 
         # Summary of years created for this viewport
-        years_created = [d.name for d in (viewport_pyramids_dir).iterdir() if d.is_dir() and d.name not in ['satellite', 'rgb']]
+        years_created = [d.name for d in (viewport_pyramids_dir).iterdir() if d.is_dir() and d.name != 'satellite']
         print(f"\nCreated Tessera pyramids for: {', '.join(sorted(years_created))}")
-
-        # Check for RGB
-        rgb_dir = viewport_pyramids_dir / "rgb"
-        if rgb_dir.exists():
-            rgb_years_created = [d.name for d in rgb_dir.iterdir() if d.is_dir()]
-            print(f"Created RGB pyramids for: {', '.join(sorted(rgb_years_created))}")
 
         # Calculate total size
         total_size = sum(f.stat().st_size for f in viewport_pyramids_dir.rglob("*.tif"))
