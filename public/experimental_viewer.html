@@ -1897,16 +1897,15 @@
 
         // Visualize source pixel with distinct marker
         function visualizeSourcePixel(lat, lon, layerGroup) {
-            // Highlight the clicked pixel distinctly
-            const sourceMarker = L.circleMarker([lat, lon], {
-                radius: 8,
-                color: '#FF4500',      // Orange-red
-                weight: 3,
-                fillColor: '#FFF',
-                fillOpacity: 1
+            // Gold triangle marker matching Panel 4 (UMAP) style, tip at the clicked point
+            const triangleIcon = L.divIcon({
+                className: '',
+                html: '<svg width="20" height="20" viewBox="0 0 20 20" style="overflow:visible;"><polygon points="0,0 20,0 10,20" fill="#FFD700" stroke="#FF8C00" stroke-width="2" stroke-linejoin="round"/></svg>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 20]  // Tip of triangle (bottom center) anchored to the point
             });
 
-            sourceMarker.bindPopup('<div style="font-size: 12px; font-weight: 600;">Source Pixel</div>');
+            const sourceMarker = L.marker([lat, lon], { icon: triangleIcon });
 
             // Add to layer group
             if (layerGroup) {
