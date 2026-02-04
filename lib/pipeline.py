@@ -10,7 +10,18 @@ import logging
 from pathlib import Path
 import time
 
+from lib.progress_tracker import ProgressTracker
+
 logger = logging.getLogger(__name__)
+
+# Pipeline stage progress allocation (must sum to 100)
+STAGE_PROGRESS = {
+    'download': (0, 50),    # 0-50%: Downloading embeddings (slowest)
+    'rgb': (50, 60),        # 50-60%: Creating RGB
+    'pyramids': (60, 75),   # 60-75%: Creating pyramids
+    'faiss': (75, 90),      # 75-90%: Creating FAISS index
+    'umap': (90, 100),      # 90-100%: Computing UMAP
+}
 
 
 class PipelineRunner:
@@ -24,6 +35,23 @@ class PipelineRunner:
         """
         self.project_root = Path(project_root)
         self.venv_python = venv_python or Path(__import__('sys').executable)
+        self.progress = None  # Unified pipeline progress tracker
+
+    def update_progress(self, stage: str, stage_percent: int, message: str):
+        """Update unified pipeline progress.
+
+        Args:
+            stage: Stage name ('download', 'rgb', 'pyramids', 'faiss', 'umap')
+            stage_percent: Progress within this stage (0-100)
+            message: Status message
+        """
+        if not self.progress:
+            return
+
+        start, end = STAGE_PROGRESS.get(stage, (0, 100))
+        # Map stage_percent (0-100) to the stage's allocated range
+        overall_percent = start + int((end - start) * stage_percent / 100)
+        self.progress.update("processing", message, overall_percent, 100)
 
     def run_script(self, script_name, *args, timeout=1800):
         """Run a Python script and return result."""
@@ -273,36 +301,55 @@ class PipelineRunner:
         logger.info(f"   Compute UMAP: {compute_umap}")
         logger.info(f"{'=' * 70}\n")
 
+        # Initialize unified pipeline progress tracker
+        self.progress = ProgressTracker(f"{viewport_name}_pipeline")
+        self.progress.update("processing", "Starting pipeline...", 0, 100)
+
         # Stage 1: Download embeddings (all years in parallel)
         # This single call downloads all requested years in parallel
+        self.update_progress('download', 0, "Downloading embeddings...")
         success, error = self.stage_1_download_embeddings(viewport_name, years_str or "")
         if not success:
+            self.progress.error(f"Download failed: {error}")
             return False, error
+        self.update_progress('download', 100, "Embeddings downloaded")
 
         # Stage 2: Create RGB (all years in parallel)
+        self.update_progress('rgb', 0, "Creating RGB visualizations...")
         success, error = self.stage_2_create_rgb(viewport_name)
         if not success:
+            self.progress.error(f"RGB creation failed: {error}")
             return False, error
+        self.update_progress('rgb', 100, "RGB created")
 
         # Stage 3: Create pyramids (all years in parallel) - CRITICAL for viewer
         # ✓ After this stage, viewer CAN SWITCH (pyramids available for at least one year)
+        self.update_progress('pyramids', 0, "Creating tile pyramids...")
         success, error = self.stage_3_create_pyramids(viewport_name)
         if not success:
+            self.progress.error(f"Pyramid creation failed: {error}")
             return False, error
+        self.update_progress('pyramids', 100, "Pyramids created")
 
         # Stage 4: Create FAISS (all years in parallel)
         # ✓ After this stage, labeling controls BECOME AVAILABLE
+        self.update_progress('faiss', 0, "Building FAISS index...")
         success, error = self.stage_4_create_faiss(viewport_name)
         if not success:
+            self.progress.error(f"FAISS creation failed: {error}")
             return False, error
+        self.update_progress('faiss', 100, "FAISS index ready")
 
         # Stage 5: Compute UMAP (optional, from first completed year)
         # ✓ After this stage, UMAP visualization BECOMES AVAILABLE
         if compute_umap:
+            self.update_progress('umap', 0, "Computing UMAP projection...")
             success, error = self.stage_5_compute_umap(viewport_name, umap_year or "")
+            self.update_progress('umap', 100, "UMAP complete")
 
         logger.info(f"\n{'=' * 70}")
         logger.info(f"✅ PARALLEL PIPELINE COMPLETE: {viewport_name}")
         logger.info(f"{'=' * 70}\n")
 
+        self.progress.complete(f"Pipeline complete for {viewport_name}")
         return True, None

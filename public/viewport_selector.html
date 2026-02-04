@@ -1438,20 +1438,19 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
                             return;
                         }
 
-                        // Also poll for detailed download progress
+                        // Poll unified pipeline progress (covers all stages: download → RGB → pyramids → FAISS → UMAP)
                         try {
-                            const progressResponse = await fetch(`/api/operations/progress/${viewportName}_embeddings`);
+                            const progressResponse = await fetch(`/api/operations/progress/${viewportName}_pipeline`);
                             const progress = await progressResponse.json();
 
                             if (progress.success && progress.status !== 'not_started') {
                                 const percent = progress.percent || 0;
                                 const message = progress.message || readyResult.message;
-                                const currentFile = progress.current_file || '';
 
-                                updateProgressBar(percent, message, currentFile);
+                                updateProgressBar(percent, message);
                                 console.log(`[PROGRESS] ${viewportName}: ${percent}% - ${message}`);
                             } else {
-                                // No detailed progress yet, show generic message
+                                // No pipeline progress yet, show generic message
                                 updateProgressBar(0, readyResult.message);
                             }
                         } catch (progressError) {
