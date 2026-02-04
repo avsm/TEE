@@ -1380,34 +1380,89 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
         // Progress tracking functions
         let progressPollInterval = null;
 
+        // Show progress modal
+        function showProgressModal(title) {
+            document.getElementById('progress-title').textContent = title;
+            document.getElementById('progress-overlay').classList.add('active');
+            updateProgressBar(0, 'Starting...');
+        }
+
+        // Hide progress modal
+        function hideProgressModal() {
+            document.getElementById('progress-overlay').classList.remove('active');
+        }
+
+        // Update progress bar display
+        function updateProgressBar(percent, message, currentFile = '') {
+            const bar = document.getElementById('progress-bar');
+            const percentText = document.getElementById('progress-percent');
+            const messageEl = document.getElementById('progress-message');
+            const fileEl = document.getElementById('progress-file');
+            const statusEl = document.getElementById('progress-status');
+
+            bar.style.width = `${percent}%`;
+            percentText.textContent = `${percent}%`;
+            messageEl.textContent = message || '';
+            fileEl.textContent = currentFile || '';
+            statusEl.textContent = percent >= 100 ? 'Complete!' : 'Processing...';
+        }
+
         async function waitForViewportReady(viewportName, maxWaitMs = 1800000) {
-            // Simple synchronous polling: check is-ready endpoint every 3 seconds
+            // Poll both is-ready and download progress every 2 seconds
             const startTime = Date.now();
-            const pollIntervalMs = 3000;  // 3 seconds
+            const pollIntervalMs = 2000;  // 2 seconds for more responsive progress
 
             console.log(`[WAIT] Starting to wait for ${viewportName} to be ready...`);
+
+            // Show progress modal
+            showProgressModal(`Creating ${viewportName}`);
 
             return new Promise((resolve) => {
                 const pollInterval = setInterval(async () => {
                     try {
-                        const response = await fetch(`/api/viewports/${viewportName}/is-ready`);
-                        const result = await response.json();
+                        // Check if ready
+                        const readyResponse = await fetch(`/api/viewports/${viewportName}/is-ready`);
+                        const readyResult = await readyResponse.json();
 
-                        console.log(`[WAIT] ${viewportName}: ${result.message} (ready: ${result.ready})`);
+                        console.log(`[WAIT] ${viewportName}: ${readyResult.message} (ready: ${readyResult.ready})`);
 
-                        // Update status display in sidebar
-                        document.getElementById('processingMessage').textContent = result.message;
+                        // Update sidebar status
+                        document.getElementById('processingMessage').textContent = readyResult.message;
 
-                        if (result.ready) {
+                        if (readyResult.ready) {
                             console.log(`[WAIT] ✓ ${viewportName} is ready!`);
+                            updateProgressBar(100, 'Complete!');
+                            setTimeout(() => hideProgressModal(), 1000);
                             clearInterval(pollInterval);
                             resolve(true);
                             return;
                         }
 
+                        // Also poll for detailed download progress
+                        try {
+                            const progressResponse = await fetch(`/api/operations/progress/${viewportName}_embeddings`);
+                            const progress = await progressResponse.json();
+
+                            if (progress.success && progress.status !== 'not_started') {
+                                const percent = progress.percent || 0;
+                                const message = progress.message || readyResult.message;
+                                const currentFile = progress.current_file || '';
+
+                                updateProgressBar(percent, message, currentFile);
+                                console.log(`[PROGRESS] ${viewportName}: ${percent}% - ${message}`);
+                            } else {
+                                // No detailed progress yet, show generic message
+                                updateProgressBar(0, readyResult.message);
+                            }
+                        } catch (progressError) {
+                            // Progress endpoint not available, just use is-ready message
+                            updateProgressBar(0, readyResult.message);
+                        }
+
                         // Check timeout
                         if (Date.now() - startTime > maxWaitMs) {
                             console.log(`[WAIT] ✗ Timeout waiting for ${viewportName}`);
+                            hideProgressModal();
                             clearInterval(pollInterval);
                             resolve(false);
                             return;
