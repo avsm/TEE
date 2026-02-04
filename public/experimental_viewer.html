@@ -632,10 +632,12 @@
                         console.log(`[CLICK] Panel: ${panel}, Location: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
 
                         if (panel === 'osm') {
-                            // Panel 1: show markers on Panels 2, 3, and 4
+                            // Panel 1: show markers on Panels 2, 3, 4, 5, and 6
                             clearCrossPanelMarkers();
                             setCrossPanelMarker('rgb', e.latlng.lat, e.latlng.lng);
                             setCrossPanelMarker('embedding', e.latlng.lat, e.latlng.lng);
+                            setCrossPanelMarker('heatmap', e.latlng.lat, e.latlng.lng);
+                            setCrossPanelMarker('embedding2', e.latlng.lat, e.latlng.lng);
                             highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
                         } else if (panel === 'embedding') {
                             // Panel 3: similarity search + markers on Panels 1 and 2 + UMAP highlight
@@ -1101,7 +1103,7 @@
         let explorerCanvasLayer = null;   // Direct canvas layer (reused on slider changes)
 
         // Cross-panel triangle markers (one per geographic panel, cleared on each new click)
-        let crossPanelMarkers = {osm: null, rgb: null, embedding: null};
+        let crossPanelMarkers = {osm: null, rgb: null, embedding: null, heatmap: null, embedding2: null};
 
         const TRIANGLE_ICON = L.divIcon({
             className: '',
