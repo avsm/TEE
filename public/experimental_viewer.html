@@ -2587,11 +2587,11 @@
 
                 if (status.computing) {
                     console.log(`[UMAP] Computing... (operation: ${status.operation_id})`);
-                    // Show loading message in Panel 4
+                    // Show loading message in Panel 4 (will be updated with progress)
                     const umapContainer = document.getElementById('map-umap');
-                    umapContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:18px;color:#666;">⏳ Computing UMAP...</div>';
+                    umapContainer.innerHTML = '<div id="umap-progress" style="display:flex;align-items:center;justify-content:center;height:100%;font-size:18px;color:#666;">⏳ Computing UMAP (0%)...</div>';
 
-                    // Poll until complete
+                    // Poll until complete, updating progress
                     await waitForUMAP(status.operation_id);
                     console.log(`[UMAP] Computation complete`);
                 }
@@ -2633,13 +2633,21 @@
             }
         }
 
-        // Poll for UMAP completion
+        // Poll for UMAP completion with progress updates
         async function waitForUMAP(operationId) {
             return new Promise(resolve => {
                 const poll = async () => {
                     try {
                         const resp = await fetch(`/api/operations/progress/${operationId}`);
                         const prog = await resp.json();
+
+                        // Update progress display
+                        const progressDiv = document.getElementById('umap-progress');
+                        if (progressDiv && prog.percent !== undefined) {
+                            const message = prog.message || 'Computing UMAP';
+                            progressDiv.textContent = `⏳ ${message} (${prog.percent}%)`;
+                        }
+
                         if (prog.status === 'complete' || prog.status === 'error') {
                             resolve();
                         } else {
