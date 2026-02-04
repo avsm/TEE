@@ -127,7 +127,12 @@ def download_embeddings():
     # Track successful downloads for metadata
     successful_years = []
 
-    for year in YEARS:
+    # Calculate total estimated size across all years for cumulative progress
+    total_years = len(list(YEARS))
+    total_estimated_bytes = est_bytes * total_years
+    cumulative_bytes_done = 0  # Track progress across all years
+
+    for year_idx, year in enumerate(YEARS):
         print(f"\n📅 Processing year {year}...")
 
         # Use viewport-specific filename for proper caching across viewports
@@ -135,13 +140,16 @@ def download_embeddings():
 
         print(f"   Target file: {output_file.name}")
         print(f"   Expected size: {est_mb:.1f} MB")
-        progress.update("processing", f"Processing year {year}...", current_file=output_file.name, total_value=est_bytes)
+        progress.update("processing", f"Year {year_idx+1}/{total_years}: Processing {year}...",
+                       current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
 
         # Check cache for matching bounds
         cached_file = check_cache(BBOX, 'embeddings')
         if cached_file:
             print(f"   ✓ Cache hit! Using existing mosaic: {cached_file}")
-            progress.update("processing", f"Using cached embeddings for {year}", current_file=output_file.name, current_value=est_bytes, total_value=est_bytes)
+            cumulative_bytes_done += est_bytes
+            progress.update("processing", f"Year {year_idx+1}/{total_years}: Using cached {year}",
+                           current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
             successful_years.append(year)
             continue
 
@@ -149,17 +157,21 @@ def download_embeddings():
             print(f"   ✓ Mosaic already exists: {output_file}")
             actual_size_mb = output_file.stat().st_size / (1024 * 1024)
             print(f"     Actual size: {actual_size_mb:.1f} MB")
-            progress.update("processing", f"Using existing mosaic for {year}", current_file=output_file.name, current_value=est_bytes, total_value=est_bytes)
+            cumulative_bytes_done += est_bytes
+            progress.update("processing", f"Year {year_idx+1}/{total_years}: Using existing {year}",
+                           current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
             successful_years.append(year)
             continue
 
         # Calculate exact download requirements using geotessera registry (dry-run equivalent)
         try:
             print(f"   Querying tile registry...")
-            progress.update("initializing", f"Querying tiles for {year}...", current_file=output_file.name)
+            progress.update("initializing", f"Year {year_idx+1}/{total_years}: Querying tiles for {year}...",
+                           current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
             tiles = list(tessera.registry.iter_tiles_in_region(BBOX, year))
             print(f"   Calculating download size ({len(tiles)} tiles)...")
-            progress.update("initializing", f"Calculating download size for {year}...", current_file=output_file.name)
+            progress.update("initializing", f"Year {year_idx+1}/{total_years}: Calculating size for {year}...",
+                           current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
             total_download_bytes, total_files, _ = tessera.registry.calculate_download_requirements(
                 tiles, EMBEDDINGS_DIR, format_type='npy', check_existing=True
             )
@@ -180,19 +192,20 @@ def download_embeddings():
         for attempt in range(1, max_retries + 1):
             try:
                 print(f"   Downloading and merging tiles (attempt {attempt}/{max_retries})...")
-                progress.update("downloading", f"Downloading {output_file.name} - {total_files} tiles ({total_download_mb:.1f} MB)",
-                               current_file=output_file.name, current_value=0, total_value=total_download_bytes)
+                progress.update("downloading", f"Year {year_idx+1}/{total_years}: Downloading {year} ({total_download_mb:.1f} MB)",
+                               current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
 
-                # Define progress callback with byte-based tracking
-                def on_geotessera_progress(current, total, status):
+                # Define progress callback with byte-based tracking (cumulative across all years)
+                def on_geotessera_progress(current, total, status, year=year, year_idx=year_idx, cumulative=cumulative_bytes_done):
                     # Estimate bytes based on tile progress (current/total * total_bytes)
                     if total > 0:
-                        estimated_bytes = int((current / total) * total_download_bytes)
-                        bytes_downloaded[0] = estimated_bytes
+                        year_bytes = int((current / total) * total_download_bytes)
+                        bytes_downloaded[0] = year_bytes
+                        overall_bytes = cumulative + year_bytes
                         progress.update("downloading",
-                                       f"Downloading {year}: {status} ({estimated_bytes / (1024*1024):.1f} / {total_download_mb:.1f} MB)",
-                                       current_value=estimated_bytes,
-                                       total_value=total_download_bytes,
+                                       f"Year {year_idx+1}/{total_years}: {year} - {status} ({year_bytes / (1024*1024):.1f} MB)",
+                                       current_value=overall_bytes,
+                                       total_value=total_estimated_bytes,
                                        current_file=f"{output_file.name}")
 
                 # Fetch mosaic for the region (auto-downloads missing tiles)
@@ -209,7 +222,8 @@ def download_embeddings():
 
                 # Save mosaic to GeoTIFF
                 height, width, bands = mosaic_array.shape
-                progress.update("saving", f"Writing {output_file.name} ({est_mb:.1f} MB) to disk - {bands} bands...", current_file=output_file.name, current_value=0, total_value=bands)
+                progress.update("saving", f"Year {year_idx+1}/{total_years}: Saving {year} to disk...",
+                               current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
 
                 with rasterio.open(
                     output_file,
@@ -223,11 +237,9 @@ def download_embeddings():
                     transform=mosaic_transform,
                     compress='lzw'
                 ) as dst:
-                    # Write each band
+                    # Write each band (no progress update to avoid bar jumping)
                     for band in range(bands):
                         dst.write(mosaic_array[:, :, band], band + 1)
-                        # Update progress: show bands written
-                        progress.update("saving", f"Writing band {band+1}/{bands}...", current_file=output_file.name, current_value=band+1, total_value=bands)
 
                 # Validate the saved file
                 print(f"   Validating TIFF file...")
@@ -236,17 +248,20 @@ def download_embeddings():
                         _ = src.read(1)  # Try reading first band
                     print(f"   ✓ File validation successful")
 
-                    # Report actual file size
+                    # Report actual file size and update cumulative progress
                     actual_size_mb = output_file.stat().st_size / (1024 * 1024)
                     print(f"   File size: {actual_size_mb:.1f} MB (estimated: {est_mb:.1f} MB)")
-                    progress.update("processing", f"✓ Saved {output_file.name}: {actual_size_mb:.1f} MB ({est_width} × {est_height} pixels)", current_file=output_file.name, current_value=est_bytes, total_value=est_bytes)
+                    cumulative_bytes_done += est_bytes
+                    progress.update("processing", f"Year {year_idx+1}/{total_years}: ✓ Saved {year} ({actual_size_mb:.1f} MB)",
+                                   current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
                     year_success = True
                     break  # File is valid, exit retry loop
                 except Exception as val_error:
                     print(f"   ✗ File validation failed: {val_error}")
                     output_file.unlink()  # Delete corrupted file
                     if attempt < max_retries:
-                        progress.update("processing", f"File corrupted, retrying (attempt {attempt+1}/{max_retries})...", current_file=output_file.name)
+                        progress.update("processing", f"Year {year_idx+1}/{total_years}: Retrying {year} (corrupted)...",
+                                       current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
                         import time
                         time.sleep(5)  # Wait before retry
                         continue
@@ -257,11 +272,14 @@ def download_embeddings():
             except Exception as e:
                 if attempt == max_retries:
                     print(f"   ⚠️  Year {year} not available: {e}")
-                    progress.update("processing", f"Year {year} not available, skipping...", current_file=output_file.name)
+                    cumulative_bytes_done += est_bytes  # Count as done even if skipped
+                    progress.update("processing", f"Year {year_idx+1}/{total_years}: Skipped {year} (not available)",
+                                   current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
                     break
                 else:
                     print(f"   ⚠️  Attempt {attempt} failed, retrying: {e}")
-                    progress.update("processing", f"Download failed, retrying (attempt {attempt+1}/{max_retries})...", current_file=output_file.name)
+                    progress.update("processing", f"Year {year_idx+1}/{total_years}: Retrying {year}...",
+                                   current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
                     import time
                     time.sleep(5)  # Wait before retry
                     continue
@@ -270,7 +288,6 @@ def download_embeddings():
         if output_file.exists() and year_success:
             size_mb = output_file.stat().st_size / (1024*1024)
             print(f"   ✓ Saved: {output_file} ({size_mb:.2f} MB)")
-            progress.update("processing", f"Saved {output_file.name} ({size_mb:.1f} MB)", current_value=int(size_mb), current_file=output_file.name)
             successful_years.append(year)
 
     print("\n" + "=" * 60)
