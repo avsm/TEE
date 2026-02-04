@@ -848,7 +848,8 @@
             // Pan map to the selected location
             map.setView([lat, lon], 12);
 
-            // Trigger the same flow as a map click
+            // Show the 5km preview box and trigger the same flow as a map click
+            showViewportPreview({ lat, lng: lon });
             createViewportFromClick({ lat, lng: lon });
         }
 
