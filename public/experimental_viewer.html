@@ -631,18 +631,19 @@
                         // Geographic panels
                         console.log(`[CLICK] Panel: ${panel}, Location: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
 
-                        // Disable labeling on OSM panel
                         if (panel === 'osm') {
-                            console.log('[CLICK] OSM panel - skipping');
-                            return;
-                        }
-
-                        // Click on embedding map triggers similarity search + UMAP highlight
-                        if (panel === 'embedding') {
+                            // Panel 1: show markers on Panels 2, 3, and 4
+                            clearCrossPanelMarkers();
+                            setCrossPanelMarker('rgb', e.latlng.lat, e.latlng.lng);
+                            setCrossPanelMarker('embedding', e.latlng.lat, e.latlng.lng);
+                            highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
+                        } else if (panel === 'embedding') {
+                            // Panel 3: similarity search + markers on Panels 1 and 2 + UMAP highlight
                             explorerClick(e.latlng.lat, e.latlng.lng);
+                            setCrossPanelMarker('osm', e.latlng.lat, e.latlng.lng);
                             highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
                         } else if (panel === 'rgb') {
-                            // Bing maps (Panel 2): Highlight location in UMAP
+                            // Panel 2: UMAP highlight
                             highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
                         }
                     }
@@ -1098,6 +1099,32 @@
         let explorerResults = null;      // Cache: {allMatches, queryTime, cacheThreshold, sourcePixel}
         let explorerVisualization = null; // Layer group for visualization
         let explorerCanvasLayer = null;   // Direct canvas layer (reused on slider changes)
+
+        // Cross-panel triangle markers (one per geographic panel, cleared on each new click)
+        let crossPanelMarkers = {osm: null, rgb: null, embedding: null};
+
+        const TRIANGLE_ICON = L.divIcon({
+            className: '',
+            html: '<svg width="20" height="20" viewBox="0 0 20 20" style="overflow:visible;"><polygon points="0,0 20,0 10,20" fill="#FFD700" stroke="#FF8C00" stroke-width="2" stroke-linejoin="round"/></svg>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 20]  // Tip of triangle anchored to the coordinate
+        });
+
+        function setCrossPanelMarker(mapKey, lat, lon) {
+            if (crossPanelMarkers[mapKey]) {
+                maps[mapKey].removeLayer(crossPanelMarkers[mapKey]);
+            }
+            crossPanelMarkers[mapKey] = L.marker([lat, lon], { icon: TRIANGLE_ICON }).addTo(maps[mapKey]);
+        }
+
+        function clearCrossPanelMarkers() {
+            for (const key of Object.keys(crossPanelMarkers)) {
+                if (crossPanelMarkers[key]) {
+                    maps[key].removeLayer(crossPanelMarkers[key]);
+                    crossPanelMarkers[key] = null;
+                }
+            }
+        }
 
         // Create a new label
         function createLabelDialog() {
@@ -1585,6 +1612,9 @@
             explorerCanvasLayer = null;
             explorerResults = null;
 
+            // Clear cross-panel triangle markers
+            clearCrossPanelMarkers();
+
             // Clear UMAP highlight marker
             if (umapCanvasLayer) {
                 umapCanvasLayer.highlightedPoint = null;
@@ -1897,15 +1927,7 @@
 
         // Visualize source pixel with distinct marker
         function visualizeSourcePixel(lat, lon, layerGroup) {
-            // Gold triangle marker matching Panel 4 (UMAP) style, tip at the clicked point
-            const triangleIcon = L.divIcon({
-                className: '',
-                html: '<svg width="20" height="20" viewBox="0 0 20 20" style="overflow:visible;"><polygon points="0,0 20,0 10,20" fill="#FFD700" stroke="#FF8C00" stroke-width="2" stroke-linejoin="round"/></svg>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 20]  // Tip of triangle (bottom center) anchored to the point
-            });
-
-            const sourceMarker = L.marker([lat, lon], { icon: triangleIcon });
+            const sourceMarker = L.marker([lat, lon], { icon: TRIANGLE_ICON });
 
             // Add to layer group
             if (layerGroup) {
