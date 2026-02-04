@@ -1525,7 +1525,10 @@ def api_umap_status(viewport_name):
             if progress.get('status') == 'in_progress':
                 return jsonify({'exists': False, 'computing': True, 'operation_id': operation_id})
             elif progress.get('status') == 'complete':
-                return jsonify({'exists': True, 'computing': False})
+                if umap_file.exists():
+                    return jsonify({'exists': True, 'computing': False})
+                # Progress says complete but file is missing — stale/failed run; fall through to retry
+                progress_file.unlink()
 
         # Start computation in background
         logger.info(f"[UMAP] Starting computation for {viewport_name}/{year}")
@@ -1536,13 +1539,19 @@ def api_umap_status(viewport_name):
                     json.dump({'status': 'in_progress', 'message': f'Computing UMAP...'}, f)
 
                 repo_dir = Path(__file__).parent.parent
-                subprocess.run(
+                result = subprocess.run(
                     [str(repo_dir / 'venv' / 'bin' / 'python3'), str(repo_dir / 'compute_umap.py'),
                      viewport_name, str(year)],
                     cwd=repo_dir,
                     capture_output=True,
                     timeout=600
                 )
+
+                if result.returncode != 0:
+                    logger.error(f"[UMAP] compute_umap.py failed: {result.stderr.decode()[:500]}")
+                    with open(progress_file, 'w') as f:
+                        json.dump({'status': 'error', 'error': result.stderr.decode()[:500]}, f)
+                    return
 
                 with open(progress_file, 'w') as f:
                     json.dump({'status': 'complete'}, f)
