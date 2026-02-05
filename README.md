@@ -208,8 +208,7 @@ blore/
 ├── compute_umap.py                    # Compute UMAP projection
 ├── compute_pca.py                     # Compute PCA projection
 ├── setup_viewport.py                  # Orchestrate full workflow
-├── tile_server.py                     # Tile server for map visualization
-└── migrate_labels_to_sqlite.py        # Migration script for labels
+└── tile_server.py                     # Tile server for map visualization
 ```
 
 ## Data Pipeline
