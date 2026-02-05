@@ -11,10 +11,11 @@ FROM ghcr.io/osgeo/gdal:ubuntu-small-3.10.0
 
 WORKDIR /app
 
-# Install Python dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
