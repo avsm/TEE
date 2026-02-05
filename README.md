@@ -84,7 +84,8 @@ The **Advanced Viewer** extends the standard viewer with a comprehensive 6-panel
    - Toggle visibility or delete as needed
 
 #### Label Data
-- Labels are saved as **persistent JSON files** in `viewports/{viewport_name}_labels.json`
+- Labels are stored in a **SQLite database** at `~/blore_data/labels.db`
+- Indexed by viewport for fast lookups with concurrent access support
 - Includes source pixel coordinates, threshold settings, and matched pixels with distances
 - Survives page reloads - your labels are always preserved
 - Automatically refresh when switching years to track temporal changes
