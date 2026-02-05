@@ -178,6 +178,8 @@ The easiest way to run TEE is with Docker:
 blore/
 ├── README.md                          # This file
 ├── requirements.txt                   # Python dependencies
+├── Dockerfile                         # Docker container definition
+├── docker-compose.yml                 # Docker Compose configuration
 │
 ├── public/                            # Web interface
 │   ├── viewer.html                    # Standard embedding viewer with map interface
@@ -186,27 +188,28 @@ blore/
 │   └── README.md                      # Frontend documentation
 │
 ├── backend/                           # Flask web server
-│   └── web_server.py                  # API endpoints and server
+│   ├── web_server.py                  # API endpoints and server
+│   └── labels_db.py                   # SQLite database for labels
 │
 ├── lib/                               # Python utilities
-│   ├── pipeline.py                    # Unified pipeline orchestration (single source of truth)
+│   ├── config.py                      # Centralized configuration (paths, env vars)
+│   ├── pipeline.py                    # Unified pipeline orchestration
 │   ├── viewport_utils.py              # Viewport file operations
 │   ├── viewport_writer.py             # Viewport configuration writer
 │   └── progress_tracker.py            # Progress tracking utilities
 │
-├── viewports/                         # Viewport configurations (created by user)
+├── viewports/                         # Viewport configurations (user-created, gitignored)
 │   └── README.md                      # Viewport directory documentation
 │
 ├── download_embeddings.py             # GeoTessera embedding downloader
 ├── create_rgb_embeddings.py           # Convert embeddings to RGB
 ├── create_pyramids.py                 # Build zoom-level pyramid structure
 ├── create_faiss_index.py              # Build similarity search indices
-├── compute_umap.py                    # Compute 2D UMAP projection for embeddings
-├── setup_viewport.py                  # Orchestrate full workflow (download → FAISS → UMAP)
-│
-├── Dockerfile                         # Docker container definition
-├── docker-compose.yml                 # Docker Compose configuration
-└── requirements.txt                   # Python dependencies
+├── compute_umap.py                    # Compute UMAP projection
+├── compute_pca.py                     # Compute PCA projection
+├── setup_viewport.py                  # Orchestrate full workflow
+├── tile_server.py                     # Tile server for map visualization
+└── migrate_labels_to_sqlite.py        # Migration script for labels
 ```
 
 ## Data Pipeline
