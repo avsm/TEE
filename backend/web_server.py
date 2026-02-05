@@ -988,6 +988,33 @@ def api_is_viewport_ready(viewport_name):
                     has_faiss = True
                     break
 
+        # Check UMAP
+        umap_status = {}
+        if faiss_dir.exists():
+            for year_dir in faiss_dir.glob("*"):
+                if year_dir.is_dir():
+                    year = year_dir.name
+                    umap_file = year_dir / 'umap_coords.npy'
+                    if umap_file.exists():
+                        umap_status[year] = 'ready'
+                    else:
+                        # Check if computing
+                        progress_file = Path(f"/tmp/{viewport_name}_umap_{year}_progress.json")
+                        if progress_file.exists():
+                            try:
+                                with open(progress_file) as f:
+                                    progress = json.load(f)
+                                if progress.get('status') == 'in_progress':
+                                    umap_status[year] = 'computing'
+                                else:
+                                    umap_status[year] = 'not_computed'
+                            except:
+                                umap_status[year] = 'not_computed'
+                        else:
+                            umap_status[year] = 'not_computed'
+
+        has_umap = any(status == 'ready' for status in umap_status.values())
+
         # Determine readiness: can view if pyramids exist (FAISS is optional for initial view)
         is_ready = has_pyramids
 
@@ -1030,6 +1057,8 @@ def api_is_viewport_ready(viewport_name):
             'has_embeddings': has_embeddings,
             'has_pyramids': has_pyramids,
             'has_faiss': has_faiss,
+            'has_umap': has_umap,
+            'umap_status': umap_status,
             'years_available': years_available
         }), 200
 
