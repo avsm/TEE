@@ -55,5 +55,9 @@ cleanup_orphaned_data.py
 # Deprecated code
 deprecated/
 
-# User-generated viewport labels
+# User-generated viewport files
+viewports/*.txt
+viewports/*_config.json
 viewports/*_labels.json
+viewports/.active
+viewports/viewport.txt
