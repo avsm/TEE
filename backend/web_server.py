@@ -217,6 +217,20 @@ def trigger_data_download_and_processing(viewport_name, years=None):
     thread.start()
 
 # ============================================================================
+# HEALTH CHECK
+# ============================================================================
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for Docker/monitoring."""
+    return jsonify({
+        'status': 'healthy',
+        'service': 'TEE',
+        'data_dir': str(DATA_DIR)
+    })
+
+
+# ============================================================================
 # API ENDPOINTS
 # ============================================================================
 
