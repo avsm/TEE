@@ -1,10 +1,9 @@
-# Ignore active viewport selection and user-created viewports
+# Ignore all user-created viewport files
 viewport.txt
 .active
 *.txt
+*_config.json
+*_labels.json
 
-# Track preset viewports
-!tile_aligned.txt
-!malleswaram_500m.txt
-!bangalore_10km.txt
+# Only track README
 !README.md
