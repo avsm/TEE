@@ -1732,13 +1732,15 @@ def api_pca_status(viewport_name):
 
 @app.route('/api/embeddings/distance-heatmap', methods=['POST'])
 def api_distance_heatmap():
-    """Compute pixel-wise Euclidean distance between two years of embeddings (tile-based)."""
+    """Compute pixel-wise Euclidean distance between two years of embeddings (vectorized)."""
     try:
+        from scipy.spatial import cKDTree
+        import time
+
         data = request.get_json()
         viewport_id = data.get('viewport_id')
         year1 = data.get('year1', 2024)
         year2 = data.get('year2', 2024)
-        zoom = data.get('zoom', 12)  # Map zoom level (default 12)
 
         if not viewport_id:
             return jsonify({
@@ -1746,6 +1748,7 @@ def api_distance_heatmap():
                 'error': 'viewport_id required'
             }), 400
 
+        start_time = time.time()
         logger.info(f"[HEATMAP] Computing distance between {year1} and {year2} for {viewport_id}...")
 
         # Load FAISS indices for both years
@@ -1771,29 +1774,18 @@ def api_distance_heatmap():
             with open(faiss_dir2 / 'metadata.json') as f:
                 metadata2 = json.load(f)
 
-            # Convert pixel coordinates to lat/lon using geotransform for year1
-            geotransform1 = metadata1['geotransform']
-            a1 = geotransform1['a']
-            b1 = geotransform1['b']
-            c1 = geotransform1['c']
-            d1 = geotransform1['d']
-            e1 = geotransform1['e']
-            f1 = geotransform1['f']
+            load_time = time.time()
+            logger.info(f"[HEATMAP] Loaded data in {load_time - start_time:.2f}s")
 
-            lons1 = c1 + a1 * pixel_coords1[:, 0] + b1 * pixel_coords1[:, 1]
-            lats1 = f1 + d1 * pixel_coords1[:, 0] + e1 * pixel_coords1[:, 1]
+            # Convert pixel coordinates to lat/lon using geotransform for year1
+            gt1 = metadata1['geotransform']
+            lons1 = gt1['c'] + gt1['a'] * pixel_coords1[:, 0] + gt1['b'] * pixel_coords1[:, 1]
+            lats1 = gt1['f'] + gt1['d'] * pixel_coords1[:, 0] + gt1['e'] * pixel_coords1[:, 1]
 
             # Convert pixel coordinates to lat/lon using geotransform for year2
-            geotransform2 = metadata2['geotransform']
-            a2 = geotransform2['a']
-            b2 = geotransform2['b']
-            c2 = geotransform2['c']
-            d2 = geotransform2['d']
-            e2 = geotransform2['e']
-            f2 = geotransform2['f']
-
-            lons2 = c2 + a2 * pixel_coords2[:, 0] + b2 * pixel_coords2[:, 1]
-            lats2 = f2 + d2 * pixel_coords2[:, 0] + e2 * pixel_coords2[:, 1]
+            gt2 = metadata2['geotransform']
+            lons2 = gt2['c'] + gt2['a'] * pixel_coords2[:, 0] + gt2['b'] * pixel_coords2[:, 1]
+            lats2 = gt2['f'] + gt2['d'] * pixel_coords2[:, 0] + gt2['e'] * pixel_coords2[:, 1]
 
         except Exception as e:
             logger.error(f"[HEATMAP] Error loading FAISS data: {e}")
@@ -1804,72 +1796,79 @@ def api_distance_heatmap():
                 'error': f'Error loading embeddings: {str(e)}'
             }), 500
 
-        # Create lookup for year1 pixels by lat/lon
-        # Build a dictionary for faster lookup
-        pixel_lookup = {}
-        for i in range(len(lats1)):
-            lat_key = round(lats1[i], 6)
-            lon_key = round(lons1[i], 6)
-            pixel_lookup[(lat_key, lon_key)] = i
+        # Vectorized coordinate matching using KDTree
+        # Build KDTree for year2 coordinates
+        coords2 = np.column_stack([lats2, lons2])
+        tree2 = cKDTree(coords2)
 
-        # Build pixel lookup for year2
-        pixel_lookup2 = {}
-        for i in range(len(lats2)):
-            lat_key = round(lats2[i], 6)
-            lon_key = round(lons2[i], 6)
-            pixel_lookup2[(lat_key, lon_key)] = i
+        # Query for nearest neighbors (tolerance ~1m in lat/lon degrees)
+        coords1 = np.column_stack([lats1, lons1])
+        distances_to_nearest, indices2 = tree2.query(coords1, k=1, distance_upper_bound=1e-5)
 
-        # Compute distances for ALL matching pixels (no subsampling to avoid banding artifacts)
-        # We compute all distances to get accurate min/max for proper normalization
-        distances = []
-        matched = 0
-        mismatched = 0
+        # Find matched pixels (those within tolerance)
+        matched_mask = np.isfinite(distances_to_nearest)
+        matched_idx1 = np.where(matched_mask)[0]
+        matched_idx2 = indices2[matched_mask]
 
-        for i in range(len(lats1)):  # Process all pixels for accurate statistics
-            lat_key = round(lats1[i], 6)
-            lon_key = round(lons1[i], 6)
+        match_time = time.time()
+        logger.info(f"[HEATMAP] Matched {len(matched_idx1):,} of {len(lats1):,} pixels in {match_time - load_time:.2f}s")
 
-            if (lat_key, lon_key) in pixel_lookup2:
-                idx2 = pixel_lookup2[(lat_key, lon_key)]
-                emb1 = all_emb1[i].astype(np.float32)
-                emb2 = all_emb2[idx2].astype(np.float32)
+        if len(matched_idx1) == 0:
+            return jsonify({
+                'success': True,
+                'distances': [],
+                'stats': {
+                    'matched': 0,
+                    'unmatched': len(lats1),
+                    'total': len(lats1),
+                    'min_distance': 0.0,
+                    'max_distance': 0.0,
+                    'mean_distance': 0.0,
+                    'median_distance': 0.0
+                }
+            })
 
-                # Compute L2 distance
-                distance = float(np.sqrt(np.sum((emb1 - emb2) ** 2)))
-                distances.append({
-                    'lat': float(lats1[i]),
-                    'lon': float(lons1[i]),
-                    'distance': distance
-                })
-                matched += 1
-            else:
-                mismatched += 1
+        # Vectorized distance computation
+        emb1_matched = all_emb1[matched_idx1].astype(np.float32)
+        emb2_matched = all_emb2[matched_idx2].astype(np.float32)
 
-        logger.info(f"[HEATMAP] ✓ Computed {matched:,} distances for {len(lats1):,} pixels")
+        # Compute L2 distances for all matched pairs at once
+        distance_values = np.linalg.norm(emb1_matched - emb2_matched, axis=1)
 
-        # Compute distance statistics for proper frontend normalization
-        if distances:
-            distance_values = np.array([d['distance'] for d in distances])
-            min_dist = float(np.min(distance_values))
-            max_dist = float(np.max(distance_values))
-            mean_dist = float(np.mean(distance_values))
-            median_dist = float(np.median(distance_values))
-        else:
-            min_dist = max_dist = mean_dist = median_dist = 0.0
+        dist_time = time.time()
+        logger.info(f"[HEATMAP] Computed {len(distance_values):,} distances in {dist_time - match_time:.2f}s")
 
-        logger.info(f"[HEATMAP] Distance stats - min: {min_dist:.3f}, max: {max_dist:.3f}, mean: {mean_dist:.3f}, median: {median_dist:.3f}")
+        # Get matched coordinates
+        lats_matched = lats1[matched_idx1]
+        lons_matched = lons1[matched_idx1]
+
+        # Build output list efficiently
+        distances = [
+            {'lat': float(lat), 'lon': float(lon), 'distance': float(dist)}
+            for lat, lon, dist in zip(lats_matched, lons_matched, distance_values)
+        ]
+
+        # Compute statistics (already have numpy array)
+        min_dist = float(np.min(distance_values))
+        max_dist = float(np.max(distance_values))
+        mean_dist = float(np.mean(distance_values))
+        median_dist = float(np.median(distance_values))
+
+        total_time = time.time() - start_time
+        logger.info(f"[HEATMAP] ✓ Complete in {total_time:.2f}s - min: {min_dist:.3f}, max: {max_dist:.3f}, mean: {mean_dist:.3f}")
 
         return jsonify({
             'success': True,
             'distances': distances,
             'stats': {
-                'matched': matched,
-                'unmatched': mismatched,
+                'matched': len(matched_idx1),
+                'unmatched': len(lats1) - len(matched_idx1),
                 'total': len(lats1),
                 'min_distance': min_dist,
                 'max_distance': max_dist,
                 'mean_distance': mean_dist,
-                'median_distance': median_dist
+                'median_distance': median_dist,
+                'compute_time_ms': int(total_time * 1000)
             }
         })
 
