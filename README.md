@@ -30,7 +30,6 @@ TEE (Tessera Embeddings Explorer) integrates geospatial data processing with dee
 - Create custom geographic viewports interactively
 - **Landmark/geocode search** — type a place name (e.g. "London") to jump the map, place the viewport box, and auto-fill the viewport name
 - **Click-to-lock preview box** — 5km box follows the mouse, locks on click, and can be repositioned by clicking again
-- Preset viewports for common regions (tile-aligned, Bangalore, Malleswaram)
 - Multi-year processing with progress tracking
 - Automatic navigation to viewer after processing
 
@@ -195,10 +194,8 @@ blore/
 │   ├── viewport_writer.py             # Viewport configuration writer
 │   └── progress_tracker.py            # Progress tracking utilities
 │
-├── viewports/                         # Viewport configurations
-│   ├── tile_aligned.txt               # Preset: tile-aligned viewport
-│   ├── bangalore_10km.txt             # Preset: Bangalore region
-│   └── malleswaram_500m.txt           # Preset: Malleswaram neighborhood
+├── viewports/                         # Viewport configurations (created by user)
+│   └── README.md                      # Viewport directory documentation
 │
 ├── download_embeddings.py             # GeoTessera embedding downloader
 ├── create_rgb_embeddings.py           # Convert embeddings to RGB
@@ -206,11 +203,10 @@ blore/
 ├── create_faiss_index.py              # Build similarity search indices
 ├── compute_umap.py                    # Compute 2D UMAP projection for embeddings
 ├── setup_viewport.py                  # Orchestrate full workflow (download → FAISS → UMAP)
-├── SETUP_WORKFLOW.md                  # Comprehensive workflow documentation
 │
-├── save.sh                            # Backup script
-├── restore.sh                         # Restore script
-└── restart.sh                         # Restart servers script
+├── Dockerfile                         # Docker container definition
+├── docker-compose.yml                 # Docker Compose configuration
+└── requirements.txt                   # Python dependencies
 ```
 
 ## Data Pipeline
@@ -458,9 +454,9 @@ POST /api/embeddings/search-similar
 Content-Type: application/json
 
 {
-  "embedding": [0.1, 0.2, ...],  // 512D vector
+  "embedding": [0.1, 0.2, ...],  // 128D vector
   "threshold": 20,                 // Distance threshold
-  "viewport_id": "tile_aligned",
+  "viewport_id": "London",
   "year": 2024
 }
 ```
