@@ -3305,16 +3305,6 @@
                     const umapIcon = status.has_umap ? '✅' : '❌';
                     const years = status.years_available ? status.years_available.join(', ') : 'None';
 
-                    // Format UMAP status per year
-                    let umapDetails = '';
-                    if (status.umap_status && Object.keys(status.umap_status).length > 0) {
-                        const umapItems = Object.entries(status.umap_status).map(([year, stat]) => {
-                            const icon = stat === 'ready' ? '✅' : (stat === 'computing' ? '⏳' : '❌');
-                            return `${year}: ${icon}`;
-                        }).join(', ');
-                        umapDetails = ` (${umapItems})`;
-                    }
-
                     content.innerHTML = `
                         <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #ddd;">
                             <strong>Viewport:</strong> ${currentViewportName}
@@ -3332,7 +3322,7 @@
                             <strong>FAISS Index:</strong> ${faissIcon}
                         </div>
                         <div style="margin-bottom: 8px;">
-                            <strong>UMAP:</strong> ${umapIcon}${umapDetails}
+                            <strong>UMAP:</strong> ${umapIcon}
                         </div>
                         <div style="margin-bottom: 8px;">
                             <strong>Years Available:</strong> ${years}
