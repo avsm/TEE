@@ -403,7 +403,7 @@ Content-Type: application/json
 ```
 GET /api/viewports/{viewport_name}/is-ready
 ```
-Returns: `{ready: bool, message: string, has_embeddings: bool, has_pyramids: bool, has_faiss: bool}`
+Returns: `{ready: bool, message: string, has_embeddings: bool, has_pyramids: bool, has_faiss: bool, years_available: [string]}`
 
 **Get available years:**
 ```

@@ -444,102 +444,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Progress Modal */
-        #progress-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 2000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #progress-overlay.active {
-            display: flex;
-        }
-
-        #progress-modal {
-            background: white;
-            border-radius: 8px;
-            padding: 30px;
-            max-width: 500px;
-            width: 90%;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-        }
-
-        #progress-modal h2 {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            color: #333;
-        }
-
-        #progress-message {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 15px;
-            word-break: break-word;
-        }
-
-        #progress-file {
-            font-size: 12px;
-            color: #999;
-            margin-bottom: 10px;
-            font-style: italic;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .progress-bar-container {
-            background: #f0f0f0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            height: 24px;
-            overflow: hidden;
-            margin-bottom: 12px;
-            position: relative;
-        }
-
-        .progress-bar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            width: 0%;
-            transition: width 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: 600;
-            color: white;
-        }
-
-        #progress-percent {
-            font-size: 13px;
-            color: #666;
-            text-align: right;
-            margin-bottom: 12px;
-        }
-
-        #progress-status {
-            font-size: 12px;
-            color: #667eea;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        #progress-status.complete {
-            color: #28a745;
-        }
-
-        #progress-status.error {
-            color: #dc3545;
-        }
     </style>
 </head>
 <body>
@@ -579,7 +483,18 @@
                 <!-- Processing Status -->
                 <div class="section" id="processingSection" style="display: none; background: #f0f4ff; padding: 12px; border-radius: 6px; border-left: 3px solid #667eea;">
                     <div style="font-size: 12px; color: #667eea; font-weight: 600; margin-bottom: 8px;">Processing Viewport</div>
-                    <div id="processingMessage" style="font-size: 13px; color: #333; line-height: 1.4;">⏳ Downloading and processing data...</div>
+                    <div id="processingViewportName" style="font-size: 14px; font-weight: 600; color: #333; margin-bottom: 6px;"></div>
+                    <div style="background: #e0e0e0; border-radius: 4px; height: 10px; overflow: hidden; margin-bottom: 6px;">
+                        <div id="processingProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #667eea, #764ba2); transition: width 0.3s ease;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                        <span id="processingPercent" style="font-size: 12px; color: #667eea; font-weight: 600;">0%</span>
+                        <span id="processingElapsed" style="font-size: 11px; color: #888;"></span>
+                    </div>
+                    <div id="processingStage" style="font-size: 12px; color: #333; font-weight: 500; margin-bottom: 4px;">⏳ Starting...</div>
+                    <div id="processingMessage" style="font-size: 11px; color: #555; line-height: 1.3;"></div>
+                    <div id="processingFile" style="font-size: 10px; color: #888; margin-top: 4px; font-family: monospace; word-break: break-all;"></div>
+                    <div id="processingBytes" style="font-size: 10px; color: #888; margin-top: 2px;"></div>
                 </div>
 
                 <!-- Create New Viewport -->
@@ -681,22 +596,6 @@
                 <div class="map-info-label" id="mapInfoLabel">Click on map</div>
                 <div class="map-info-value" id="mapInfoValue">to select viewport center</div>
             </div>
-        </div>
-    </div>
-
-    <!-- Progress Modal -->
-    <div id="progress-overlay">
-        <div id="progress-modal">
-            <h2 id="progress-title">Processing...</h2>
-            <div id="progress-file"></div>
-            <div id="progress-message"></div>
-            <div class="progress-bar-container">
-                <div class="progress-bar-fill" id="progress-bar">
-                    <span id="progress-bar-text"></span>
-                </div>
-            </div>
-            <div id="progress-percent">0%</div>
-            <div id="progress-status">Starting...</div>
         </div>
     </div>
 
@@ -1161,44 +1060,46 @@
             }, 100);
         }
 
-        // Go directly to viewer
+        // Track active progress polling interval
+        let activeProgressPollInterval = null;
+        let activeProgressViewport = null;
+
+        // Check and display viewport status using unified is-ready endpoint
         async function checkAndDisplayDataStatus(viewportName) {
             try {
-                const response = await fetch(`/api/viewports/${viewportName}/data-status`);
-                const result = await response.json();
-                if (!result.success) return;
+                const response = await fetch(`/api/viewports/${viewportName}/is-ready`);
+                const status = await response.json();
 
-                const status = result.data;
                 const statusEl = document.getElementById('dataStatusMessage');
                 const statusText = document.getElementById('dataStatusText');
 
-                // Build status message
-                let message = '';
-                let ready = status.pyramids;  // Only pyramids required for viewing; FAISS is optional
-
-                if (status.pyramids) {
-                    message = `✅ Ready to view (${status.years_available.length} year${status.years_available.length !== 1 ? 's' : ''})`;
-                    if (!status.faiss) {
-                        message += ' - FAISS indexing in background...';
-                    }
+                // Use message from server (already formatted)
+                if (status.ready) {
                     statusEl.style.background = '#e8f5e9';
                     statusEl.style.color = '#2e7d32';
+                    // Hide processing section if viewport is ready
+                    document.getElementById('processingSection').style.display = 'none';
+                    // Stop any active polling
+                    if (activeProgressPollInterval) {
+                        clearInterval(activeProgressPollInterval);
+                        activeProgressPollInterval = null;
+                        activeProgressViewport = null;
+                    }
                 } else {
-                    let processing = [];
-                    if (!status.pyramids) processing.push('Creating pyramids');
-                    if (!status.faiss) processing.push('Building FAISS index');
-                    message = `⏳ Processing: ${processing.join(', ')}`;
                     statusEl.style.background = '#fff3cd';
                     statusEl.style.color = '#856404';
+                    // Show detailed progress section and start polling
+                    document.getElementById('processingSection').style.display = 'block';
+                    startProgressPolling(viewportName);
                 }
 
-                statusText.textContent = message;
+                statusText.textContent = status.message;
                 statusEl.style.display = 'block';
 
                 // Disable viewer button if data not ready
                 const viewerBtn = document.getElementById('quickViewerBtn');
-                viewerBtn.disabled = !ready;
-                if (!ready) {
+                viewerBtn.disabled = !status.ready;
+                if (!status.ready) {
                     viewerBtn.style.opacity = '0.5';
                     viewerBtn.style.cursor = 'not-allowed';
                 } else {
@@ -1208,6 +1109,87 @@
             } catch (error) {
                 console.error('Error checking data status:', error);
             }
+        }
+
+        // Start polling for detailed progress on a viewport
+        function startProgressPolling(viewportName) {
+            // Don't start duplicate polling for same viewport
+            if (activeProgressViewport === viewportName && activeProgressPollInterval) {
+                return;
+            }
+
+            // Stop any existing polling
+            if (activeProgressPollInterval) {
+                clearInterval(activeProgressPollInterval);
+            }
+
+            activeProgressViewport = viewportName;
+
+            // Initialize with basic info
+            updateSidebarProgress(viewportName, {
+                percent: 0,
+                status: 'processing',
+                message: 'Checking progress...'
+            });
+
+            // Poll every 2 seconds
+            activeProgressPollInterval = setInterval(async () => {
+                try {
+                    // Check if ready
+                    const readyResponse = await fetch(`/api/viewports/${viewportName}/is-ready`);
+                    const readyResult = await readyResponse.json();
+
+                    if (readyResult.ready) {
+                        // Viewport is ready - stop polling and update UI
+                        updateSidebarProgress(viewportName, {
+                            percent: 100,
+                            status: 'complete',
+                            message: 'Ready to view!'
+                        });
+                        clearInterval(activeProgressPollInterval);
+                        activeProgressPollInterval = null;
+                        activeProgressViewport = null;
+
+                        // Update the status display
+                        const statusEl = document.getElementById('dataStatusMessage');
+                        const statusText = document.getElementById('dataStatusText');
+                        statusEl.style.background = '#e8f5e9';
+                        statusEl.style.color = '#2e7d32';
+                        statusText.textContent = readyResult.message;
+
+                        // Enable viewer button
+                        const viewerBtn = document.getElementById('quickViewerBtn');
+                        viewerBtn.disabled = false;
+                        viewerBtn.style.opacity = '1';
+                        viewerBtn.style.cursor = 'pointer';
+                        return;
+                    }
+
+                    // Poll pipeline progress
+                    try {
+                        const progressResponse = await fetch(`/api/operations/progress/${viewportName}_pipeline`);
+                        const progress = await progressResponse.json();
+
+                        if (progress.success && progress.status !== 'not_started') {
+                            updateSidebarProgress(viewportName, progress);
+                        } else {
+                            updateSidebarProgress(viewportName, {
+                                percent: 0,
+                                status: 'processing',
+                                message: readyResult.message
+                            });
+                        }
+                    } catch (progressError) {
+                        updateSidebarProgress(viewportName, {
+                            percent: 0,
+                            status: 'processing',
+                            message: readyResult.message
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error polling progress:', error);
+                }
+            }, 2000);
         }
 
         async function goToViewer(viewportName) {
@@ -1377,34 +1359,86 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
             }).join('');
         }
 
-        // Progress tracking functions
-        let progressPollInterval = null;
-
-        // Show progress modal
-        function showProgressModal(title) {
-            document.getElementById('progress-title').textContent = title;
-            document.getElementById('progress-overlay').classList.add('active');
-            updateProgressBar(0, 'Starting...');
+        // Format bytes to human readable
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
 
-        // Hide progress modal
-        function hideProgressModal() {
-            document.getElementById('progress-overlay').classList.remove('active');
+        // Format elapsed time
+        function formatElapsed(startTimeStr) {
+            if (!startTimeStr) return '';
+            const start = new Date(startTimeStr);
+            const now = new Date();
+            const elapsed = Math.floor((now - start) / 1000);
+            if (elapsed < 60) return `${elapsed}s`;
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+            return `${mins}m ${secs}s`;
         }
 
-        // Update progress bar display
-        function updateProgressBar(percent, message, currentFile = '') {
-            const bar = document.getElementById('progress-bar');
-            const percentText = document.getElementById('progress-percent');
-            const messageEl = document.getElementById('progress-message');
-            const fileEl = document.getElementById('progress-file');
-            const statusEl = document.getElementById('progress-status');
+        // Get stage emoji based on status/message
+        function getStageEmoji(status, message) {
+            const msgLower = (message || '').toLowerCase();
+            if (status === 'complete') return '✓';
+            if (status === 'error') return '✗';
+            if (msgLower.includes('download')) return '📥';
+            if (msgLower.includes('rgb')) return '🎨';
+            if (msgLower.includes('pyramid')) return '🔺';
+            if (msgLower.includes('faiss')) return '🔍';
+            if (msgLower.includes('umap') || msgLower.includes('pca')) return '📊';
+            return '⏳';
+        }
 
-            bar.style.width = `${percent}%`;
-            percentText.textContent = `${percent}%`;
-            messageEl.textContent = message || '';
-            fileEl.textContent = currentFile || '';
-            statusEl.textContent = percent >= 100 ? 'Complete!' : 'Processing...';
+        // Update sidebar progress display with full details
+        function updateSidebarProgress(viewportName, progress) {
+            const percent = progress.percent || 0;
+            const status = progress.status || 'processing';
+            const message = progress.message || '';
+            const currentFile = progress.current_file || '';
+            const currentValue = progress.current_value || 0;
+            const totalValue = progress.total_value || 0;
+            const startTime = progress.start_time || '';
+
+            document.getElementById('processingViewportName').textContent = viewportName;
+            document.getElementById('processingProgressBar').style.width = `${percent}%`;
+            document.getElementById('processingPercent').textContent = `${percent}%`;
+            document.getElementById('processingElapsed').textContent = formatElapsed(startTime);
+
+            const emoji = getStageEmoji(status, message);
+            document.getElementById('processingStage').textContent = `${emoji} ${message}`;
+
+            // Show current file if available
+            if (currentFile) {
+                document.getElementById('processingFile').textContent = currentFile;
+                document.getElementById('processingFile').style.display = 'block';
+            } else {
+                document.getElementById('processingFile').style.display = 'none';
+            }
+
+            // Show bytes progress if available (for downloads)
+            if (totalValue > 0 && currentValue > 0) {
+                document.getElementById('processingBytes').textContent =
+                    `${formatBytes(currentValue)} / ${formatBytes(totalValue)}`;
+                document.getElementById('processingBytes').style.display = 'block';
+            } else {
+                document.getElementById('processingBytes').style.display = 'none';
+            }
+
+            // Additional status message
+            if (status === 'error') {
+                document.getElementById('processingMessage').textContent = 'Error occurred - check logs';
+                document.getElementById('processingMessage').style.color = '#d32f2f';
+            } else if (status === 'complete') {
+                document.getElementById('processingMessage').textContent = 'Processing complete!';
+                document.getElementById('processingMessage').style.color = '#388e3c';
+            } else {
+                document.getElementById('processingMessage').textContent = '';
+                document.getElementById('processingMessage').style.color = '#555';
+            }
         }
 
         async function waitForViewportReady(viewportName, maxWaitMs = 1800000) {
@@ -1414,8 +1448,13 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
 
             console.log(`[WAIT] Starting to wait for ${viewportName} to be ready...`);
 
-            // Show progress modal
-            showProgressModal(`Creating ${viewportName}`);
+            // Initialize sidebar progress
+            updateSidebarProgress(viewportName, {
+                percent: 0,
+                status: 'starting',
+                message: 'Starting pipeline...',
+                start_time: new Date().toISOString()
+            });
 
             return new Promise((resolve) => {
                 const pollInterval = setInterval(async () => {
@@ -1426,13 +1465,13 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
 
                         console.log(`[WAIT] ${viewportName}: ${readyResult.message} (ready: ${readyResult.ready})`);
 
-                        // Update sidebar status
-                        document.getElementById('processingMessage').textContent = readyResult.message;
-
                         if (readyResult.ready) {
                             console.log(`[WAIT] ✓ ${viewportName} is ready!`);
-                            updateProgressBar(100, 'Complete!');
-                            setTimeout(() => hideProgressModal(), 1000);
+                            updateSidebarProgress(viewportName, {
+                                percent: 100,
+                                status: 'complete',
+                                message: 'Ready to view!'
+                            });
                             clearInterval(pollInterval);
                             resolve(true);
                             return;
@@ -1444,24 +1483,33 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
                             const progress = await progressResponse.json();
 
                             if (progress.success && progress.status !== 'not_started') {
-                                const percent = progress.percent || 0;
-                                const message = progress.message || readyResult.message;
-
-                                updateProgressBar(percent, message);
-                                console.log(`[PROGRESS] ${viewportName}: ${percent}% - ${message}`);
+                                updateSidebarProgress(viewportName, progress);
+                                console.log(`[PROGRESS] ${viewportName}: ${progress.percent}% - ${progress.message}`);
                             } else {
-                                // No pipeline progress yet, show generic message
-                                updateProgressBar(0, readyResult.message);
+                                // No pipeline progress yet, show is-ready message
+                                updateSidebarProgress(viewportName, {
+                                    percent: 0,
+                                    status: 'starting',
+                                    message: readyResult.message
+                                });
                             }
                         } catch (progressError) {
                             // Progress endpoint not available, just use is-ready message
-                            updateProgressBar(0, readyResult.message);
+                            updateSidebarProgress(viewportName, {
+                                percent: 0,
+                                status: 'processing',
+                                message: readyResult.message
+                            });
                         }
 
                         // Check timeout
                         if (Date.now() - startTime > maxWaitMs) {
                             console.log(`[WAIT] ✗ Timeout waiting for ${viewportName}`);
-                            hideProgressModal();
+                            updateSidebarProgress(viewportName, {
+                                percent: 0,
+                                status: 'error',
+                                message: 'Timeout - please try again'
+                            });
                             clearInterval(pollInterval);
                             resolve(false);
                             return;

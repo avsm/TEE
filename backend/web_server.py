@@ -930,63 +930,6 @@ def api_get_available_years(viewport_name):
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
-@app.route('/api/viewports/<viewport_name>/data-status', methods=['GET'])
-def api_get_data_status(viewport_name):
-    """Check data preparation status for a viewport."""
-    try:
-        status = {
-            'viewport': viewport_name,
-            'embeddings': False,
-            'rgb': False,
-            'pyramids': False,
-            'faiss': False,
-            'years_available': []
-        }
-
-        # Check embeddings
-        embedding_files = list(MOSAICS_DIR.glob(f"{viewport_name}_embeddings_*.tif"))
-        status['embeddings'] = len(embedding_files) > 0
-        status['embeddings_count'] = len(embedding_files)
-
-        # Check RGB
-        rgb_files = list((MOSAICS_DIR / "rgb").glob(f"{viewport_name}_*_rgb.tif")) if (MOSAICS_DIR / "rgb").exists() else []
-        status['rgb'] = len(rgb_files) > 0
-        status['rgb_count'] = len(rgb_files)
-
-        # Check pyramids
-        pyramid_dir = PYRAMIDS_DIR / viewport_name
-        if pyramid_dir.exists():
-            for year_dir in pyramid_dir.glob("*"):
-                if year_dir.is_dir() and year_dir.name not in ['satellite', 'rgb']:
-                    if (year_dir / "level_0.tif").exists():
-                        status['years_available'].append(year_dir.name)
-            status['pyramids'] = len(status['years_available']) > 0
-
-        # Check FAISS
-        faiss_dir = FAISS_INDICES_DIR / viewport_name
-        if faiss_dir.exists():
-            for year_dir in faiss_dir.glob("*"):
-                if year_dir.is_dir() and (year_dir / "embeddings.index").exists():
-                    status['faiss'] = True
-                    break
-
-        # Overall status
-        if status['embeddings'] and status['rgb'] and status['pyramids'] and status['faiss']:
-            status['ready'] = True
-            status['message'] = f"✓ Complete! {len(status['years_available'])} years ready"
-        elif status['embeddings']:
-            status['ready'] = False
-            status['message'] = "Processing... (embeddings downloaded)"
-        else:
-            status['ready'] = False
-            status['message'] = "Downloading embeddings..."
-
-        return jsonify({'success': True, 'data': status})
-    except Exception as e:
-        logger.error(f"Error checking data status: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 400
-
-
 @app.route('/api/viewports/<viewport_name>/is-ready', methods=['GET'])
 def api_is_viewport_ready(viewport_name):
     """Simple synchronous check: is this viewport ready to view?"""
@@ -998,12 +941,13 @@ def api_is_viewport_ready(viewport_name):
         # Check pyramids
         pyramid_dir = PYRAMIDS_DIR / viewport_name
         has_pyramids = False
+        years_available = []
         if pyramid_dir.exists():
             for year_dir in pyramid_dir.glob("*"):
                 if year_dir.is_dir() and year_dir.name not in ['satellite', 'rgb']:
                     if (year_dir / "level_0.tif").exists():
                         has_pyramids = True
-                        break
+                        years_available.append(year_dir.name)
 
         # Check FAISS
         has_faiss = False
@@ -1018,7 +962,8 @@ def api_is_viewport_ready(viewport_name):
         is_ready = has_pyramids
 
         if is_ready:
-            message = "✓ Ready to view!"
+            year_count = len(years_available)
+            message = f"✓ Ready to view ({year_count} year{'s' if year_count != 1 else ''})"
         elif not has_embeddings:
             message = "⏳ Downloading embeddings..."
         else:
@@ -1054,7 +999,8 @@ def api_is_viewport_ready(viewport_name):
             'message': message,
             'has_embeddings': has_embeddings,
             'has_pyramids': has_pyramids,
-            'has_faiss': has_faiss
+            'has_faiss': has_faiss,
+            'years_available': years_available
         }), 200
 
     except Exception as e:
