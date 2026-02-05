@@ -882,6 +882,7 @@ def api_delete_viewport():
             f'{viewport_name}_pyramids_progress.json',
             f'{viewport_name}_faiss_*_progress.json',
             f'{viewport_name}_umap_*_progress.json',
+            f'{viewport_name}_pca_*_progress.json',
             f'{viewport_name}_pipeline_progress.json',
         ]
         for pattern in progress_patterns:
