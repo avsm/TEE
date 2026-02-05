@@ -30,6 +30,14 @@ from lib.viewport_utils import (
 )
 from lib.viewport_writer import set_active_viewport, create_viewport_from_bounds
 from lib.pipeline import PipelineRunner
+from backend.labels_db import (
+    init_db as init_labels_db,
+    get_labels,
+    save_label,
+    delete_label,
+    delete_viewport_labels,
+    get_label_count
+)
 
 # Configure logging
 logging.basicConfig(
@@ -855,13 +863,22 @@ def api_delete_viewport():
             except Exception as e:
                 logger.warning(f"Error deleting FAISS index directory for {viewport_name}: {e}")
 
-        # Delete labels JSON file
+        # Delete labels from SQLite database
+        try:
+            labels_deleted = delete_viewport_labels(viewport_name)
+            if labels_deleted > 0:
+                deleted_items.append(f"labels: {labels_deleted} from database")
+                logger.info(f"✓ Deleted {labels_deleted} labels from database")
+        except Exception as e:
+            logger.warning(f"Error deleting labels from database for {viewport_name}: {e}")
+
+        # Also delete legacy labels JSON file if it exists
         labels_file = viewports_dir / f'{viewport_name}_labels.json'
         if labels_file.exists():
             try:
                 labels_file.unlink()
-                deleted_items.append(f"labels: {labels_file.name}")
-                logger.info(f"✓ Deleted labels: {labels_file.name}")
+                deleted_items.append(f"labels JSON: {labels_file.name}")
+                logger.info(f"✓ Deleted legacy labels file: {labels_file.name}")
             except Exception as e:
                 logger.warning(f"Error deleting labels file for {viewport_name}: {e}")
 
@@ -1887,24 +1904,13 @@ VIEWPORTS_DIR = Path.home() / 'blore' / 'viewports'
 
 @app.route('/api/viewports/<viewport_name>/labels', methods=['GET'])
 def api_get_viewport_labels(viewport_name):
-    """Load all saved labels for a viewport."""
+    """Load all saved labels for a viewport from SQLite database."""
     try:
-        labels_file = VIEWPORTS_DIR / f'{viewport_name}_labels.json'
-
-        if not labels_file.exists():
-            return jsonify({
-                'success': True,
-                'labels': [],
-                'label_count': 0
-            })
-
-        with open(labels_file, 'r') as f:
-            data = json.load(f)
-
+        labels = get_labels(viewport_name)
         return jsonify({
             'success': True,
-            'labels': data.get('labels', []),
-            'label_count': len(data.get('labels', []))
+            'labels': labels,
+            'label_count': len(labels)
         })
     except Exception as e:
         logger.error(f"Error loading labels for viewport {viewport_name}: {e}")
@@ -1913,44 +1919,16 @@ def api_get_viewport_labels(viewport_name):
 
 @app.route('/api/viewports/<viewport_name>/labels', methods=['POST'])
 def api_save_viewport_label(viewport_name):
-    """Save a new label to a viewport."""
+    """Save a new label to SQLite database."""
     try:
         label_data = request.get_json()
-        labels_file = VIEWPORTS_DIR / f'{viewport_name}_labels.json'
-
-        # Ensure viewports directory exists
-        VIEWPORTS_DIR.mkdir(parents=True, exist_ok=True)
-
-        # Load existing or create new
-        if labels_file.exists():
-            with open(labels_file, 'r') as f:
-                data = json.load(f)
-        else:
-            data = {
-                'viewport_name': viewport_name,
-                'created': datetime.utcnow().isoformat() + 'Z',
-                'labels': []
-            }
-
-        # Generate unique ID and add metadata
-        label_id = f"label_{int(datetime.utcnow().timestamp() * 1000)}"
-        label_data['id'] = label_id
-        label_data['created'] = datetime.utcnow().isoformat() + 'Z'
-        label_data['pixel_count'] = len(label_data.get('pixels', []))
-
-        # Append and save
-        data['labels'].append(label_data)
-        data['modified'] = datetime.utcnow().isoformat() + 'Z'
-
-        with open(labels_file, 'w') as f:
-            json.dump(data, f, indent=2)
-
-        logger.info(f"✓ Saved label '{label_data.get('name')}' for viewport '{viewport_name}'")
+        label_id = save_label(viewport_name, label_data)
+        pixel_count = len(label_data.get('pixels', []))
 
         return jsonify({
             'success': True,
             'label_id': label_id,
-            'pixel_count': label_data['pixel_count']
+            'pixel_count': pixel_count
         })
 
     except Exception as e:
@@ -1960,29 +1938,12 @@ def api_save_viewport_label(viewport_name):
 
 @app.route('/api/viewports/<viewport_name>/labels/<label_id>', methods=['DELETE'])
 def api_delete_viewport_label(viewport_name, label_id):
-    """Delete a specific label from a viewport."""
+    """Delete a specific label from SQLite database."""
     try:
-        labels_file = VIEWPORTS_DIR / f'{viewport_name}_labels.json'
+        deleted = delete_label(viewport_name, label_id)
 
-        if not labels_file.exists():
-            return jsonify({'success': False, 'error': 'Labels file not found'}), 404
-
-        with open(labels_file, 'r') as f:
-            data = json.load(f)
-
-        # Filter out the label
-        original_count = len(data['labels'])
-        data['labels'] = [l for l in data['labels'] if l['id'] != label_id]
-
-        if len(data['labels']) == original_count:
+        if not deleted:
             return jsonify({'success': False, 'error': 'Label not found'}), 404
-
-        data['modified'] = datetime.utcnow().isoformat() + 'Z'
-
-        with open(labels_file, 'w') as f:
-            json.dump(data, f, indent=2)
-
-        logger.info(f"✓ Deleted label '{label_id}' from viewport '{viewport_name}'")
 
         return jsonify({'success': True, 'label_id': label_id})
 
@@ -2030,4 +1991,8 @@ if __name__ == '__main__':
     print("Starting Blore Viewport Manager Web Server...")
     print("Open http://localhost:8001 in your browser")
     print("Press Ctrl+C to stop")
+
+    # Initialize labels database
+    init_labels_db()
+
     app.run(debug=True, host='0.0.0.0', port=8001)
