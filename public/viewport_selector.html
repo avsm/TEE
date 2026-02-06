@@ -604,6 +604,13 @@
         <!-- Map Container -->
         <div class="map-container">
             <div id="map"></div>
+            <!-- Basemap Selector -->
+            <div id="basemap-selector" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(255,255,255,0.95); padding: 8px 12px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
+                <select id="basemap-select" onchange="switchBasemap(this.value)" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; cursor: pointer;">
+                    <option value="osm">OpenStreetMap</option>
+                    <option value="bing">Bing Satellite</option>
+                </select>
+            </div>
             <div class="map-info" id="mapInfo">
                 <div class="map-info-label" id="mapInfoLabel">Click on map</div>
                 <div class="map-info-value" id="mapInfoValue">to select viewport center</div>
@@ -641,14 +648,37 @@
             return { latOffset, lngOffset };
         }
 
+        // Basemap layers
+        let currentBasemap = null;
+        const basemaps = {
+            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }),
+            bing: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri World Imagery',
+                maxZoom: 19
+            })
+        };
+
+        function switchBasemap(type) {
+            if (currentBasemap) {
+                map.removeLayer(currentBasemap);
+            }
+            currentBasemap = basemaps[type];
+            currentBasemap.addTo(map);
+            currentBasemap.bringToBack();
+            localStorage.setItem('preferredBasemap', type);
+        }
+
         // Initialize map
         function initMap() {
             map = L.map('map').setView(mapCenter, mapZoom);
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            }).addTo(map);
+            // Restore basemap preference or default to OSM
+            const savedBasemap = localStorage.getItem('preferredBasemap') || 'osm';
+            document.getElementById('basemap-select').value = savedBasemap;
+            switchBasemap(savedBasemap);
 
             // Add click handler for viewport creation
             map.on('click', function(e) {
