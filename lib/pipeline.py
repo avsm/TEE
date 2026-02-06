@@ -22,8 +22,9 @@ STAGE_PROGRESS = {
     'download': (0, 50),    # 0-50%: Downloading embeddings (slowest)
     'rgb': (50, 60),        # 50-60%: Creating RGB
     'pyramids': (60, 75),   # 60-75%: Creating pyramids
-    'faiss': (75, 90),      # 75-90%: Creating FAISS index
-    'umap': (90, 100),      # 90-100%: Computing UMAP
+    'faiss': (75, 85),      # 75-85%: Creating FAISS index
+    'pca': (85, 95),        # 85-95%: Computing PCA for all years
+    'umap': (95, 100),      # 95-100%: Computing UMAP (optional)
 }
 
 # Global registry of active pipeline processes (for cancellation)
@@ -315,16 +316,7 @@ class PipelineRunner:
         if missing_files:
             logger.warning(f"[PIPELINE] Stage 4 warning - Missing files: {missing_files}")
 
-        # Compute PCA (fast, ~seconds) for visualization
-        logger.info(f"[PIPELINE] Computing PCA for '{viewport_name}'...")
-        year = faiss_year_dir.name
-        pca_result = self.run_script('compute_pca.py', viewport_name, year, timeout=120)
-        if pca_result.returncode != 0:
-            logger.warning(f"[PIPELINE] PCA computation failed (non-critical): {pca_result.stderr[:200]}")
-        else:
-            logger.info(f"[PIPELINE] ✓ PCA computed successfully")
-
-        logger.info(f"[PIPELINE] ✓ Stage 4 complete: FAISS index and PCA created")
+        logger.info(f"[PIPELINE] ✓ Stage 4 complete: FAISS index created")
 
         # Cleanup: Delete GeoTIFF mosaics now that FAISS has the embeddings
         self.cleanup_mosaics(viewport_name)
@@ -373,6 +365,47 @@ class PipelineRunner:
         except Exception as e:
             # Non-critical - log but don't fail pipeline
             logger.warning(f"[PIPELINE] Cleanup warning: {e}")
+
+    def stage_4b_compute_pca(self, viewport_name):
+        """Stage 4b: Compute PCA for ALL years (for Panel 4 visualization)."""
+        logger.info(f"[PIPELINE] STAGE 4b: Computing PCA for '{viewport_name}' (all years)...")
+
+        faiss_dir = FAISS_DIR / viewport_name
+        if not faiss_dir.exists():
+            logger.warning(f"[PIPELINE] ⚠️  PCA skipped - no FAISS directory for {viewport_name}")
+            return True, None
+
+        # Find all years with FAISS indices
+        years_processed = 0
+        years_failed = 0
+
+        for year_dir in sorted(faiss_dir.iterdir()):
+            if year_dir.is_dir() and (year_dir / "embeddings.index").exists():
+                year = year_dir.name
+                pca_file = year_dir / "pca_coords.npy"
+
+                # Skip if PCA already exists
+                if pca_file.exists():
+                    logger.info(f"[PIPELINE]   ✓ PCA already exists for {year}")
+                    years_processed += 1
+                    continue
+
+                logger.info(f"[PIPELINE]   Computing PCA for {year}...")
+                result = self.run_script('compute_pca.py', viewport_name, year, timeout=120)
+
+                if result.returncode != 0:
+                    logger.warning(f"[PIPELINE]   ⚠️  PCA failed for {year}: {result.stderr[:100]}")
+                    years_failed += 1
+                else:
+                    logger.info(f"[PIPELINE]   ✓ PCA computed for {year}")
+                    years_processed += 1
+
+        if years_processed > 0:
+            logger.info(f"[PIPELINE] ✓ Stage 4b complete: PCA computed for {years_processed} years")
+        else:
+            logger.warning(f"[PIPELINE] ⚠️  Stage 4b: No PCA files created")
+
+        return True, None  # PCA is non-critical, don't fail pipeline
 
     def stage_5_compute_umap(self, viewport_name, umap_year):
         """Stage 5: Compute UMAP 2D projection (optional)."""
@@ -504,6 +537,16 @@ class PipelineRunner:
         if check_cancelled():
             return False, "Cancelled by user"
         self.update_progress('faiss', 100, "FAISS index ready")
+
+        # Stage 4b: Compute PCA for all years (for Panel 4 visualization)
+        # ✓ After this stage, Panel 4 PCA scatter plot BECOMES AVAILABLE
+        if check_cancelled():
+            return False, "Cancelled by user"
+        self.update_progress('pca', 0, "Computing PCA for visualization...")
+        success, error = self.stage_4b_compute_pca(viewport_name)
+        if check_cancelled():
+            return False, "Cancelled by user"
+        self.update_progress('pca', 100, "PCA ready")
 
         # Stage 5: Compute UMAP (always run for 6-panel view precomputation)
         # ✓ After this stage, UMAP visualization BECOMES AVAILABLE
