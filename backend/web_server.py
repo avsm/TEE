@@ -1187,6 +1187,14 @@ def api_is_viewport_ready(viewport_name):
                         has_pyramids = True
                         years_available.append(year_dir.name)
 
+        # Check PCA (need one from any year for Panel 4 visualization)
+        has_pca = False
+        if faiss_dir.exists():
+            for year_dir in faiss_dir.glob("*"):
+                if year_dir.is_dir() and (year_dir / 'pca_coords.npy').exists():
+                    has_pca = True
+                    break
+
         # Check UMAP (just need one from any year)
         has_umap = False
         if faiss_dir.exists():
@@ -1237,6 +1245,7 @@ def api_is_viewport_ready(viewport_name):
             'has_embeddings': has_embeddings,
             'has_pyramids': has_pyramids,
             'has_faiss': has_faiss,
+            'has_pca': has_pca,
             'has_umap': has_umap,
             'years_available': years_available
         }), 200
