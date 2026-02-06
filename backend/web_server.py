@@ -840,6 +840,15 @@ def api_cancel_processing(viewport_name):
                 except:
                     pass
 
+            # Delete years metadata
+            years_file = MOSAICS_DIR / f'{viewport_name}_years.json'
+            if years_file.exists():
+                try:
+                    years_file.unlink()
+                    deleted_items.append(f"years: {years_file.name}")
+                except:
+                    pass
+
             # Delete RGB mosaics
             rgb_dir = MOSAICS_DIR / 'rgb'
             if rgb_dir.exists():
