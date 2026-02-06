@@ -525,8 +525,8 @@
                     <div class="create-form" id="createForm">
                         <!-- Geocode search -->
                         <div style="margin-bottom: 10px; position: relative;">
-                            <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 6px;">Search for a location</label>
-                            <input type="text" id="geocodeSearch" placeholder="e.g. London, Paris, Tokyo..." autocomplete="off"
+                            <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 6px;">Search or enter coordinates</label>
+                            <input type="text" id="geocodeSearch" placeholder="London, Paris or 51.5074, -0.1278" autocomplete="off"
                                 style="width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
                             <div id="geocodeResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
                             </div>
@@ -720,8 +720,46 @@
             });
         }
 
-        // --- Geocode search (Nominatim) ---
+        // --- Geocode search (Nominatim) with lat/long support ---
         let geocodeDebounceTimer = null;
+
+        // Parse lat/long from user input (supports various formats like Google Maps)
+        function parseLatLong(input) {
+            // Remove any degree symbols, extra spaces
+            const cleaned = input.replace(/[°'"]/g, '').trim();
+
+            // Pattern 1: "lat, lon" or "lat,lon" (comma separated)
+            const commaPattern = /^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/;
+            // Pattern 2: "lat lon" (space separated, at least 2 spaces or clear separation)
+            const spacePattern = /^(-?\d+\.?\d*)\s+(-?\d+\.?\d*)$/;
+
+            let match = cleaned.match(commaPattern);
+            if (match) {
+                const num1 = parseFloat(match[1]);
+                const num2 = parseFloat(match[2]);
+                // Determine which is lat and which is lon based on valid ranges
+                // Latitude: -90 to 90, Longitude: -180 to 180
+                if (Math.abs(num1) <= 90 && Math.abs(num2) <= 180) {
+                    return { lat: num1, lon: num2 };
+                } else if (Math.abs(num2) <= 90 && Math.abs(num1) <= 180) {
+                    // User might have entered lon, lat
+                    return { lat: num2, lon: num1 };
+                }
+            }
+
+            match = cleaned.match(spacePattern);
+            if (match) {
+                const num1 = parseFloat(match[1]);
+                const num2 = parseFloat(match[2]);
+                if (Math.abs(num1) <= 90 && Math.abs(num2) <= 180) {
+                    return { lat: num1, lon: num2 };
+                } else if (Math.abs(num2) <= 90 && Math.abs(num1) <= 180) {
+                    return { lat: num2, lon: num1 };
+                }
+            }
+
+            return null;
+        }
 
         function initGeocodeSearch() {
             const input = document.getElementById('geocodeSearch');
@@ -732,6 +770,15 @@
                     hideGeocodeResults();
                     return;
                 }
+
+                // Check if input is lat/long coordinates
+                const coords = parseLatLong(query);
+                if (coords) {
+                    // Show coordinate result immediately
+                    renderCoordinateResult(coords, query);
+                    return;
+                }
+
                 geocodeDebounceTimer = setTimeout(() => fetchGeocode(query), 300);
             });
 
@@ -755,6 +802,49 @@
                 console.error('[GEOCODE] Fetch failed:', error);
                 hideGeocodeResults();
             }
+        }
+
+        // Render a coordinate result (for direct lat/long input)
+        function renderCoordinateResult(coords, originalInput) {
+            const container = document.getElementById('geocodeResults');
+            container.innerHTML = '';
+
+            const div = document.createElement('div');
+            div.style.cssText = 'padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px;';
+
+            div.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 16px;">📍</span>
+                    <div>
+                        <div><strong>Go to coordinates</strong></div>
+                        <div style="color: #666; font-size: 12px; font-family: monospace;">${coords.lat.toFixed(6)}°, ${coords.lon.toFixed(6)}°</div>
+                    </div>
+                </div>
+            `;
+
+            div.addEventListener('mouseenter', () => div.style.background = '#f0f7ff');
+            div.addEventListener('mouseleave', () => div.style.background = 'white');
+
+            div.addEventListener('click', () => {
+                hideGeocodeResults();
+                document.getElementById('geocodeSearch').value = `${coords.lat.toFixed(6)}, ${coords.lon.toFixed(6)}`;
+
+                // Pan map to the coordinates
+                map.setView([coords.lat, coords.lon], 12);
+
+                // Show the 5km preview box and trigger the same flow as a map click
+                showViewportPreview({ lat: coords.lat, lng: coords.lon });
+                createViewportFromClick({ lat: coords.lat, lng: coords.lon });
+
+                // Generate a name from coordinates
+                const latDir = coords.lat >= 0 ? 'N' : 'S';
+                const lonDir = coords.lon >= 0 ? 'E' : 'W';
+                const name = `viewport_${Math.abs(coords.lat).toFixed(2)}${latDir}_${Math.abs(coords.lon).toFixed(2)}${lonDir}`;
+                document.getElementById('viewportName').value = name;
+            });
+
+            container.appendChild(div);
+            container.style.display = 'block';
         }
 
         function renderGeocodeResults(results) {
@@ -1329,6 +1419,7 @@
                         document.getElementById('processingSection').style.display = 'none';
                         activeProgressViewport = null;
                         loadViewports(); // Refresh viewport list
+                        loadCurrentViewport(); // Refresh active viewport display (backend clears it on cancel)
                     }, 2000);
 
                     // Second cleanup after 3 minutes to catch files from still-running downloads
