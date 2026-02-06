@@ -105,10 +105,18 @@ def create_rgb_from_tessera(input_file, output_file, upscale_factor=3):
     return output_file
 
 
-def create_pyramid_level(input_file, output_file, scale_factor, target_size=4408, use_nearest=False):
-    """Create pyramid level - constant 4408×4408 output, with 2x2 averaging between levels.
+def create_pyramid_level(input_file, output_file, scale_factor, target_width, target_height, use_nearest=False):
+    """Create pyramid level - high-resolution RECTANGULAR output, with 2x2 averaging between levels.
+
+    Maintains aspect ratio by using rectangular target dimensions instead of square.
+    This preserves crisp 10m resolution boundaries without distortion.
 
     Args:
+        input_file: Path to the input GeoTIFF (previous pyramid level)
+        output_file: Path to write the output GeoTIFF
+        scale_factor: The pyramid level number (1, 2, 3, etc.)
+        target_width: Target output width (maintains high resolution)
+        target_height: Target output height (maintains aspect ratio)
         use_nearest: If True, use nearest-neighbor resampling (crisp boundaries).
                      If False, use Lanczos (smooth). Top 3 levels use nearest-neighbor
                      for crisp 10m embedding boundaries.
@@ -130,27 +138,27 @@ def create_pyramid_level(input_file, output_file, scale_factor, target_size=4408
             resampling=resampling_method
         )
 
-        # Step 2: Upsample back to target size (4408×4408) using specified filter
+        # Step 2: Upsample back to target size (rectangular, maintaining aspect ratio)
         upsampled_bands = []
         for i in range(downsampled_data.shape[0]):
             img = Image.fromarray(downsampled_data[i], mode='L')
-            img_upsampled = img.resize((target_size, target_size), resize_filter)
+            img_upsampled = img.resize((target_width, target_height), resize_filter)
             upsampled_bands.append(np.array(img_upsampled))
 
         final_data = np.stack(upsampled_bands, axis=0)
 
         # Update transform to reflect the effective resolution change
-        # Even though output is 4408×4408, each pixel represents a larger area
+        # Output is target_width×target_height, each pixel represents a larger area
         transform = src.transform * src.transform.scale(
-            (src.width / intermediate_width) * (intermediate_width / target_size),
-            (src.height / intermediate_height) * (intermediate_height / target_size)
+            (src.width / intermediate_width) * (intermediate_width / target_width),
+            (src.height / intermediate_height) * (intermediate_height / target_height)
         )
 
         # Update profile
         profile = src.profile.copy()
         profile.update({
-            'height': target_size,
-            'width': target_size,
+            'height': target_height,
+            'width': target_width,
             'transform': transform
         })
 
@@ -161,7 +169,7 @@ def create_pyramid_level(input_file, output_file, scale_factor, target_size=4408
     size_kb = output_file.stat().st_size / 1024
     spatial_scale = 10 * (2 ** scale_factor)  # 20m, 40m, 80m, etc.
     resampling_label = "nearest" if use_nearest else "lanczos"
-    print(f"    Level {scale_factor}: {target_size}×{target_size} @ {spatial_scale}m/pixel [{resampling_label}] ({size_kb:.1f} KB)")
+    print(f"    Level {scale_factor}: {target_width}×{target_height} @ {spatial_scale}m/pixel [{resampling_label}] ({size_kb:.1f} KB)")
 
 
 def upscale_image(source_file, output_file, upscale_factor=3):
@@ -205,33 +213,44 @@ def upscale_image(source_file, output_file, upscale_factor=3):
 
 
 def create_pyramids_for_image(source_file, output_dir, name, upscale_factor=1):
-    """Create all pyramid levels for a single image - constant 4408×4408 output."""
+    """Create all pyramid levels for a single image - high-resolution RECTANGULAR output."""
     print(f"\n📸 Creating pyramids for {name}...")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Level 0: Native resolution (should already be 4408×4408)
+    # Level 0: Native resolution (copy source file)
     level_0 = output_dir / "level_0.tif"
 
     with rasterio.open(source_file) as src:
         profile = src.profile.copy()
         data = src.read()
+        source_width = src.width
+        source_height = src.height
         with rasterio.open(level_0, 'w', **profile) as dst:
             dst.write(data)
 
     size_kb = level_0.stat().st_size / 1024
-    with rasterio.open(level_0) as src:
-        print(f"    Level 0: {src.width}×{src.height} @ 10m/pixel ({size_kb:.1f} KB)")
+    print(f"    Level 0: {source_width}×{source_height} @ 10m/pixel ({size_kb:.1f} KB)")
 
-    # Create downsampled levels with constant 4408×4408 output
-    # Each level averages 2x2 pixels from previous level, then upsamples to 4408×4408
+    # Calculate rectangular target dimensions based on source aspect ratio
+    # Use 4408 as base for the LARGER dimension, scale other dimension proportionally
+    TARGET_BASE = 4408
+    if source_width >= source_height:
+        target_width = TARGET_BASE
+        target_height = int(TARGET_BASE * source_height / source_width)
+    else:
+        target_height = TARGET_BASE
+        target_width = int(TARGET_BASE * source_width / source_height)
+
+    # Create downsampled levels with high-resolution RECTANGULAR output
+    # Each level averages 2x2 pixels from previous level, then upsamples to target dimensions
     # Use nearest-neighbor for top 3 levels (0-2) to preserve crisp 10m embedding boundaries
     # Use Lanczos for coarser levels (3+) for smoother appearance at lower zoom
     prev_level_file = level_0
     for level in range(1, NUM_ZOOM_LEVELS):
         level_file = output_dir / f"level_{level}.tif"
         use_nearest = (level <= 2)  # Levels 1-2 use nearest-neighbor (top 3 with level_0)
-        create_pyramid_level(prev_level_file, level_file, level, use_nearest=use_nearest)
+        create_pyramid_level(prev_level_file, level_file, level, target_width, target_height, use_nearest=use_nearest)
         prev_level_file = level_file
 
     print(f"  ✓ Created {NUM_ZOOM_LEVELS} zoom levels in {output_dir}")
