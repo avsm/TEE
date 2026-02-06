@@ -3423,6 +3423,7 @@
                     const embeddingsIcon = status.has_embeddings ? '✅' : '❌';
                     const pyramidsIcon = status.has_pyramids ? '✅' : '❌';
                     const faissIcon = status.has_faiss ? '✅' : '❌';
+                    const pcaIcon = status.has_pca ? '✅' : '❌';
                     const umapIcon = status.has_umap ? '✅' : '❌';
                     const years = status.years_available ? status.years_available.join(', ') : 'None';
 
@@ -3441,6 +3442,9 @@
                         </div>
                         <div style="margin-bottom: 8px;">
                             <strong>FAISS Index:</strong> ${faissIcon}
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            <strong>PCA (Panel 4):</strong> ${pcaIcon}
                         </div>
                         <div style="margin-bottom: 8px;">
                             <strong>UMAP:</strong> ${umapIcon}
