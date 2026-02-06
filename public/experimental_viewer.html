@@ -117,6 +117,16 @@
             grid-template-rows: 1fr 1fr;
             gap: 2px;
             background: #1a1a1a;
+            transition: grid-template-rows 0.3s ease;
+        }
+
+        /* 3-panel mode: hide bottom row */
+        #map-container.three-panel {
+            grid-template-rows: 1fr;
+        }
+
+        #map-container.three-panel .panel:nth-child(n+4) {
+            display: none;
         }
 
         .panel {
@@ -271,7 +281,7 @@
 </head>
 <body>
     <div id="controls">
-        <h1 id="viewer-title">3-Panel Viewer</h1>
+        <h1 id="viewer-title">Advanced Viewer</h1>
 
         <!-- Back to Viewports -->
         <button style="background: #6c757d; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;" onclick="window.location.href = '/'">← Back</button>
@@ -306,6 +316,13 @@
             </button>
             <button id="status-btn" style="padding: 8px 12px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap;">
                 ℹ️ Status
+            </button>
+        </div>
+
+        <!-- Panel Layout Toggle -->
+        <div style="display: flex; gap: 10px; align-items: center; margin-left: 20px; border-left: 1px solid #444; padding-left: 20px;">
+            <button id="panel-toggle-btn" onclick="togglePanelLayout()" style="padding: 8px 12px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap;">
+                ⬇ 6 Panels
             </button>
         </div>
 
@@ -1598,6 +1615,49 @@
         // =====================================================================
 
         // Update threshold display when slider changes
+        // Toggle between 3-panel and 6-panel layout
+        let isPanelMode6 = true;  // Start in 6-panel mode
+
+        function togglePanelLayout() {
+            const container = document.getElementById('map-container');
+            const btn = document.getElementById('panel-toggle-btn');
+
+            isPanelMode6 = !isPanelMode6;
+
+            if (isPanelMode6) {
+                // Switch to 6 panels
+                container.classList.remove('three-panel');
+                btn.innerHTML = '⬇ 6 Panels';
+                btn.style.background = '#28a745';
+            } else {
+                // Switch to 3 panels
+                container.classList.add('three-panel');
+                btn.innerHTML = '⬆ 3 Panels';
+                btn.style.background = '#17a2b8';
+            }
+
+            // Leaflet maps need invalidateSize() after container resize
+            setTimeout(() => {
+                Object.values(maps).forEach(map => {
+                    if (map && map.invalidateSize) {
+                        map.invalidateSize();
+                    }
+                });
+            }, 350);  // Wait for CSS transition
+
+            // Save preference
+            localStorage.setItem('panelMode', isPanelMode6 ? '6' : '3');
+        }
+
+        // Restore panel mode preference on load
+        function restorePanelMode() {
+            const saved = localStorage.getItem('panelMode');
+            if (saved === '3') {
+                isPanelMode6 = true;  // Will be toggled to false
+                togglePanelLayout();
+            }
+        }
+
         function updateThresholdDisplay() {
             const slider = document.getElementById('similarity-threshold');
             const display = document.getElementById('threshold-display');
@@ -2856,6 +2916,7 @@
 
             // Then create maps with correct viewport
             createMaps();
+            restorePanelMode();  // Restore 3/6 panel preference
             await loadAvailableYears();  // Panel 3: Load year selector
             await loadAvailableYears2(); // Panel 6: Load second year selector
             loadLabels();
