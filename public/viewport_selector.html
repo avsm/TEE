@@ -594,15 +594,6 @@
                         <div id="dataStatusText">Loading...</div>
                     </div>
 
-                    <!-- Viewer Type Selection -->
-                    <div style="margin-bottom: 10px;">
-                        <label style="font-size: 13px; color: #666; display: block; margin-bottom: 5px;">Viewer Type:</label>
-                        <select id="viewer-type-selector" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; background: white; color: #333;">
-                            <option value="viewer.html">Standard Viewer</option>
-                            <option value="experimental_viewer.html">Advanced Viewer</option>
-                        </select>
-                    </div>
-
                     <button class="btn-download" id="quickViewerBtn" onclick="goToViewer()" style="width: 100%; border-color: #667eea; color: #667eea; background: #f0f4ff;">
                         <span>▶ Open Viewer</span>
                     </button>
@@ -974,10 +965,8 @@
 
                     if (isReady) {
                         console.log('[VIEWPORT CREATE] ✓ Data is ready, navigating to viewer...');
-                        // Use the user's selected viewer (respects Advanced/Standard choice)
-                        const viewerType = document.getElementById('viewer-type-selector').value;
-                        console.log(`[VIEWPORT CREATE] Navigating to ${viewerType}`);
-                        window.location.href = viewerType;
+                        console.log('[VIEWPORT CREATE] Navigating to viewer');
+                        window.location.href = 'viewer.html';
                     } else {
                         console.log('[VIEWPORT CREATE] ✗ Timeout waiting for data');
                         document.getElementById('processingMessage').textContent = '✗ Processing timeout - please check back in a few minutes';
@@ -1344,14 +1333,8 @@
                 const result = await response.json();
 
                 if (result.ready) {
-                    // Get selected viewer type
-                    const viewerType = document.getElementById('viewer-type-selector').value;
-
-                    // Save preference to localStorage
-                    localStorage.setItem('preferredViewer', viewerType);
-
-                    console.log(`[VIEWER] ${name} is ready, navigating to ${viewerType}`);
-                    window.location.href = viewerType;
+                    console.log(`[VIEWER] ${name} is ready, navigating to viewer`);
+                    window.location.href = 'viewer.html';
                 } else {
                     alert(`Data not ready yet.\n\n${result.message}\n\nPlease wait and try again.`);
                 }
@@ -1911,12 +1894,6 @@ Max Lon: ${bounds.maxLon.toFixed(4)}°
 
         // Initialize on page load
         window.addEventListener('DOMContentLoaded', function() {
-            // Restore viewer preference from localStorage
-            const savedViewer = localStorage.getItem('preferredViewer');
-            if (savedViewer) {
-                document.getElementById('viewer-type-selector').value = savedViewer;
-            }
-
             initMap();
             initGeocodeSearch();
             loadCurrentViewport();
