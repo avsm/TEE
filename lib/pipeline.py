@@ -240,7 +240,16 @@ class PipelineRunner:
         if missing_files:
             logger.warning(f"[PIPELINE] Stage 4 warning - Missing files: {missing_files}")
 
-        logger.info(f"[PIPELINE] ✓ Stage 4 complete: FAISS index created")
+        # Compute PCA (fast, ~seconds) for visualization
+        logger.info(f"[PIPELINE] Computing PCA for '{viewport_name}'...")
+        year = faiss_year_dir.name
+        pca_result = self.run_script('compute_pca.py', viewport_name, year, timeout=120)
+        if pca_result.returncode != 0:
+            logger.warning(f"[PIPELINE] PCA computation failed (non-critical): {pca_result.stderr[:200]}")
+        else:
+            logger.info(f"[PIPELINE] ✓ PCA computed successfully")
+
+        logger.info(f"[PIPELINE] ✓ Stage 4 complete: FAISS index and PCA created")
         return True, None
 
     def stage_5_compute_umap(self, viewport_name, umap_year):

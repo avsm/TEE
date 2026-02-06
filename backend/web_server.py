@@ -745,7 +745,11 @@ def api_downloads_progress(task_id):
 
 @app.route('/api/operations/progress/<operation_id>', methods=['GET'])
 def api_operations_progress(operation_id):
-    """Get progress of an operation (embeddings, pyramids, FAISS) from progress JSON file."""
+    """Get progress of an operation (embeddings, pyramids, FAISS) from progress JSON file.
+
+    For pipeline operations, merges detailed progress from sub-operations (e.g., embeddings download)
+    to provide unified progress tracking with full detail (current_file, bytes, etc.).
+    """
     try:
         progress_file = Path(f"/tmp/{operation_id}_progress.json")
 
@@ -758,6 +762,34 @@ def api_operations_progress(operation_id):
 
         with open(progress_file, 'r') as f:
             progress_data = json.load(f)
+
+        # For pipeline operations, merge detailed progress from sub-operations
+        # This ensures unified progress tracking with full detail
+        if operation_id.endswith('_pipeline'):
+            viewport_name = operation_id.rsplit('_pipeline', 1)[0]
+            message = progress_data.get('message', '').lower()
+
+            # During download stage, merge embeddings progress for detailed info
+            if 'download' in message or progress_data.get('percent', 0) < 30:
+                embeddings_progress_file = Path(f"/tmp/{viewport_name}_embeddings_progress.json")
+                if embeddings_progress_file.exists():
+                    try:
+                        with open(embeddings_progress_file, 'r') as f:
+                            embeddings_data = json.load(f)
+                        # Merge detailed fields from embeddings progress
+                        if embeddings_data.get('message'):
+                            progress_data['message'] = embeddings_data['message']
+                        if embeddings_data.get('current_file'):
+                            progress_data['current_file'] = embeddings_data['current_file']
+                        if embeddings_data.get('current_value'):
+                            progress_data['current_value'] = embeddings_data['current_value']
+                        if embeddings_data.get('total_value'):
+                            progress_data['total_value'] = embeddings_data['total_value']
+                        # Keep pipeline percent for overall progress, but use embeddings status
+                        if embeddings_data.get('status') == 'downloading':
+                            progress_data['status'] = 'downloading'
+                    except (json.JSONDecodeError, IOError):
+                        pass
 
         return jsonify({
             'success': True,
