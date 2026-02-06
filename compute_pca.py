@@ -29,7 +29,7 @@ FAISS_INDICES_DIR = FAISS_DIR
 def compute_pca(viewport_name, year):
     """Compute PCA for embeddings."""
     # Initialize progress tracker
-    progress = ProgressTracker(f"{viewport_name}_pca_{year}")
+    progress = ProgressTracker(f"{viewport_name}_pipeline")
     progress.update("starting", f"Initializing PCA for {viewport_name}/{year}...")
 
     try:

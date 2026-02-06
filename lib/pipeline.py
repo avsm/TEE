@@ -373,14 +373,13 @@ class PipelineRunner:
             return False, "Cancelled by user"
         self.update_progress('faiss', 100, "FAISS index ready")
 
-        # Stage 5: Compute UMAP (optional, from first completed year)
+        # Stage 5: Compute UMAP (always run for 6-panel view precomputation)
         # ✓ After this stage, UMAP visualization BECOMES AVAILABLE
-        if compute_umap:
-            if check_cancelled():
-                return False, "Cancelled by user"
-            self.update_progress('umap', 0, "Computing UMAP projection...")
-            success, error = self.stage_5_compute_umap(viewport_name, umap_year or "")
-            self.update_progress('umap', 100, "UMAP complete")
+        if check_cancelled():
+            return False, "Cancelled by user"
+        self.update_progress('umap', 0, "Computing UMAP projection...")
+        success, error = self.stage_5_compute_umap(viewport_name, umap_year or "")
+        self.update_progress('umap', 100, "UMAP complete")
 
         if check_cancelled():
             return False, "Cancelled by user"

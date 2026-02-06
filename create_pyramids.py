@@ -249,8 +249,8 @@ def main():
         print("Processing any available mosaic files...")
         viewport_id = None
 
-    # Initialize progress tracker
-    progress = ProgressTracker(f"{viewport_id}_pyramids" if viewport_id else "pyramids")
+    # Initialize progress tracker - use pipeline progress file for single source of truth
+    progress = ProgressTracker(f"{viewport_id}_pipeline" if viewport_id else "pyramids")
     progress.update("starting", "Initializing pyramid creation...")
 
     print("=" * 70)

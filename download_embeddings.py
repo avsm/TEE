@@ -94,8 +94,8 @@ def download_embeddings():
         print(f"ERROR: Failed to read viewport: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Initialize progress tracker
-    progress = ProgressTracker(f"{viewport_id}_embeddings")
+    # Initialize progress tracker - use pipeline progress file for single source of truth
+    progress = ProgressTracker(f"{viewport_id}_pipeline")
     progress.update("starting", f"Initializing download for {viewport_id}...")
 
     # Create output directories
@@ -190,18 +190,19 @@ def download_embeddings():
         for attempt in range(1, max_retries + 1):
             try:
                 print(f"   Downloading and merging tiles (attempt {attempt}/{max_retries})...")
-                progress.update("downloading", f"Year {year_idx+1}/{total_years}: Downloading {year} ({total_download_mb:.1f} MB)",
+                progress.update("downloading", f"Year {year_idx+1}/{total_years}: Downloading {year} (0.0 / {total_download_mb:.1f} MB)",
                                current_file=output_file.name, current_value=cumulative_bytes_done, total_value=total_estimated_bytes)
 
                 # Define progress callback with byte-based tracking (cumulative across all years)
-                def on_geotessera_progress(current, total, status, year=year, year_idx=year_idx, cumulative=cumulative_bytes_done):
+                def on_geotessera_progress(current, total, status, year=year, year_idx=year_idx, cumulative=cumulative_bytes_done, total_mb=total_download_mb):
                     # Estimate bytes based on tile progress (current/total * total_bytes)
                     if total > 0:
                         year_bytes = int((current / total) * total_download_bytes)
                         bytes_downloaded[0] = year_bytes
                         overall_bytes = cumulative + year_bytes
+                        year_mb_done = year_bytes / (1024*1024)
                         progress.update("downloading",
-                                       f"Year {year_idx+1}/{total_years}: {year} - {status} ({year_bytes / (1024*1024):.1f} MB)",
+                                       f"Year {year_idx+1}/{total_years}: {year} - {status} ({year_mb_done:.1f} / {total_mb:.1f} MB)",
                                        current_value=overall_bytes,
                                        total_value=total_estimated_bytes,
                                        current_file=f"{output_file.name}")

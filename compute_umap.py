@@ -26,7 +26,7 @@ FAISS_INDICES_DIR = FAISS_DIR
 def compute_umap(viewport_name, year):
     """Compute UMAP for embeddings."""
     # Initialize progress tracker
-    progress = ProgressTracker(f"{viewport_name}_umap_{year}")
+    progress = ProgressTracker(f"{viewport_name}_pipeline")
     progress.update("starting", f"Initializing UMAP for {viewport_name}/{year}...")
 
     try:

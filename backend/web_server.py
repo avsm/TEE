@@ -703,33 +703,26 @@ def api_downloads_progress(task_id):
             'error': task['error']
         }
 
-        # Check for detailed operation progress (embeddings, pyramids, or FAISS)
+        # Check for detailed operation progress from single source of truth
         try:
             viewport = get_active_viewport()
             viewport_name = viewport['viewport_id']
 
-            # Find the most recently modified progress file
-            latest_progress_file = None
-            latest_mtime = 0
-
-            for op_type in ['embeddings', 'pyramids', 'faiss']:
-                progress_file = Path(f"/tmp/{viewport_name}_{op_type}_progress.json")
-                if progress_file.exists():
-                    mtime = progress_file.stat().st_mtime
-                    if mtime > latest_mtime:
-                        latest_mtime = mtime
-                        latest_progress_file = progress_file
-
-            # Load the most recent progress file
-            if latest_progress_file:
+            # Single source of truth: pipeline progress file
+            progress_file = Path(f"/tmp/{viewport_name}_pipeline_progress.json")
+            if progress_file.exists():
                 try:
-                    with open(latest_progress_file, 'r') as f:
+                    with open(progress_file, 'r') as f:
                         op_progress = json.load(f)
                         # Include detailed message if available
                         if op_progress.get('message'):
                             response['detailed_message'] = op_progress['message']
                         if op_progress.get('current_file'):
                             response['current_file'] = op_progress['current_file']
+                        if op_progress.get('current_value'):
+                            response['current_value'] = op_progress['current_value']
+                        if op_progress.get('total_value'):
+                            response['total_value'] = op_progress['total_value']
                 except (json.JSONDecodeError, IOError):
                     pass
         except Exception:
@@ -763,34 +756,7 @@ def api_operations_progress(operation_id):
         with open(progress_file, 'r') as f:
             progress_data = json.load(f)
 
-        # For pipeline operations, merge detailed progress from sub-operations
-        # This ensures unified progress tracking with full detail
-        if operation_id.endswith('_pipeline'):
-            viewport_name = operation_id.rsplit('_pipeline', 1)[0]
-            message = progress_data.get('message', '').lower()
-
-            # During download stage, merge embeddings progress for detailed info
-            if 'download' in message or progress_data.get('percent', 0) < 30:
-                embeddings_progress_file = Path(f"/tmp/{viewport_name}_embeddings_progress.json")
-                if embeddings_progress_file.exists():
-                    try:
-                        with open(embeddings_progress_file, 'r') as f:
-                            embeddings_data = json.load(f)
-                        # Merge detailed fields from embeddings progress
-                        if embeddings_data.get('message'):
-                            progress_data['message'] = embeddings_data['message']
-                        if embeddings_data.get('current_file'):
-                            progress_data['current_file'] = embeddings_data['current_file']
-                        if embeddings_data.get('current_value'):
-                            progress_data['current_value'] = embeddings_data['current_value']
-                        if embeddings_data.get('total_value'):
-                            progress_data['total_value'] = embeddings_data['total_value']
-                        # Keep pipeline percent for overall progress, but use embeddings status
-                        if embeddings_data.get('status') == 'downloading':
-                            progress_data['status'] = 'downloading'
-                    except (json.JSONDecodeError, IOError):
-                        pass
-
+        # Single source of truth - all progress written to {viewport}_pipeline_progress.json
         return jsonify({
             'success': True,
             **progress_data
@@ -1803,65 +1769,32 @@ def api_compute_pca(viewport_name):
 
 @app.route('/api/viewports/<viewport_name>/umap-status', methods=['GET'])
 def api_umap_status(viewport_name):
-    """Check if UMAP exists and trigger computation if not."""
+    """Check if UMAP exists. UMAP is computed by pipeline orchestration."""
     try:
         year = request.args.get('year', '2024')
         faiss_dir = FAISS_INDICES_DIR / viewport_name / str(year)
         umap_file = faiss_dir / 'umap_coords.npy'
-        operation_id = f"{viewport_name}_umap_{year}"
+        operation_id = f"{viewport_name}_pipeline"  # Single source of truth
         progress_file = Path(f"/tmp/{operation_id}_progress.json")
 
         # Already computed
         if umap_file.exists():
             return jsonify({'exists': True, 'computing': False})
 
-        # Check if already computing
+        # Check if pipeline is running (UMAP will be computed as part of it)
         if progress_file.exists():
             with open(progress_file) as f:
                 progress = json.load(f)
-            if progress.get('status') == 'in_progress':
+            if progress.get('status') in ('in_progress', 'processing', 'starting', 'downloading'):
                 return jsonify({'exists': False, 'computing': True, 'operation_id': operation_id})
-            elif progress.get('status') == 'complete':
-                if umap_file.exists():
-                    return jsonify({'exists': True, 'computing': False})
-                # Progress says complete but file is missing — stale/failed run; fall through to retry
-                progress_file.unlink()
 
-        # Start computation in background
-        logger.info(f"[UMAP] Starting computation for {viewport_name}/{year}")
-
-        def compute_background():
-            try:
-                with open(progress_file, 'w') as f:
-                    json.dump({'status': 'in_progress', 'message': f'Computing UMAP...'}, f)
-
-                repo_dir = Path(__file__).parent.parent
-                result = subprocess.run(
-                    [str(repo_dir / 'venv' / 'bin' / 'python3'), str(repo_dir / 'compute_umap.py'),
-                     viewport_name, str(year)],
-                    cwd=repo_dir,
-                    capture_output=True,
-                    timeout=600
-                )
-
-                if result.returncode != 0:
-                    logger.error(f"[UMAP] compute_umap.py failed: {result.stderr.decode()[:500]}")
-                    with open(progress_file, 'w') as f:
-                        json.dump({'status': 'error', 'error': result.stderr.decode()[:500]}, f)
-                    return
-
-                with open(progress_file, 'w') as f:
-                    json.dump({'status': 'complete'}, f)
-
-            except Exception as e:
-                logger.error(f"[UMAP] Error: {e}")
-                with open(progress_file, 'w') as f:
-                    json.dump({'status': 'error', 'error': str(e)}, f)
-
-        thread = threading.Thread(target=compute_background, daemon=True)
-        thread.start()
-
-        return jsonify({'exists': False, 'computing': True, 'operation_id': operation_id})
+        # Not computed and pipeline not running - waiting for pipeline to start
+        return jsonify({
+            'exists': False,
+            'computing': False,
+            'waiting': True,
+            'message': 'Waiting for pipeline to compute UMAP...'
+        })
 
     except Exception as e:
         logger.error(f"[UMAP] Status error: {e}")
@@ -1870,75 +1803,32 @@ def api_umap_status(viewport_name):
 
 @app.route('/api/viewports/<viewport_name>/pca-status', methods=['GET'])
 def api_pca_status(viewport_name):
-    """Check if PCA exists and trigger computation if not."""
+    """Check if PCA exists. PCA is computed by pipeline orchestration."""
     try:
         year = request.args.get('year', '2024')
         faiss_dir = FAISS_INDICES_DIR / viewport_name / str(year)
         pca_file = faiss_dir / 'pca_coords.npy'
-        operation_id = f"{viewport_name}_pca_{year}"
+        operation_id = f"{viewport_name}_pipeline"  # Single source of truth
         progress_file = Path(f"/tmp/{operation_id}_progress.json")
 
         # Already computed
         if pca_file.exists():
             return jsonify({'exists': True, 'computing': False})
 
-        # Check if already computing
+        # Check if pipeline is running (PCA will be computed as part of it)
         if progress_file.exists():
             with open(progress_file) as f:
                 progress = json.load(f)
-            if progress.get('status') in ('in_progress', 'processing', 'starting'):
+            if progress.get('status') in ('in_progress', 'processing', 'starting', 'downloading'):
                 return jsonify({'exists': False, 'computing': True, 'operation_id': operation_id})
-            elif progress.get('status') == 'complete':
-                if pca_file.exists():
-                    return jsonify({'exists': True, 'computing': False})
-                # Progress says complete but file is missing — stale/failed run; fall through to retry
-                progress_file.unlink()
 
-        # Check if embeddings exist (required for PCA) - don't trigger computation if not ready
-        embeddings_file = faiss_dir / 'all_embeddings.npy'
-        if not embeddings_file.exists():
-            return jsonify({
-                'exists': False,
-                'computing': False,
-                'waiting': True,
-                'message': 'Waiting for embeddings (FAISS indexing in progress)...'
-            })
-
-        # Start computation in background (PCA is fast, but still run async for consistency)
-        logger.info(f"[PCA] Starting computation for {viewport_name}/{year}")
-
-        def compute_background():
-            try:
-                with open(progress_file, 'w') as f:
-                    json.dump({'status': 'in_progress', 'message': f'Computing PCA...'}, f)
-
-                repo_dir = Path(__file__).parent.parent
-                result = subprocess.run(
-                    [str(repo_dir / 'venv' / 'bin' / 'python3'), str(repo_dir / 'compute_pca.py'),
-                     viewport_name, str(year)],
-                    cwd=repo_dir,
-                    capture_output=True,
-                    timeout=60  # PCA is fast, 60s timeout is plenty
-                )
-
-                if result.returncode != 0:
-                    logger.error(f"[PCA] compute_pca.py failed: {result.stderr.decode()[:500]}")
-                    with open(progress_file, 'w') as f:
-                        json.dump({'status': 'error', 'error': result.stderr.decode()[:500]}, f)
-                    return
-
-                with open(progress_file, 'w') as f:
-                    json.dump({'status': 'complete'}, f)
-
-            except Exception as e:
-                logger.error(f"[PCA] Error: {e}")
-                with open(progress_file, 'w') as f:
-                    json.dump({'status': 'error', 'error': str(e)}, f)
-
-        thread = threading.Thread(target=compute_background, daemon=True)
-        thread.start()
-
-        return jsonify({'exists': False, 'computing': True, 'operation_id': operation_id})
+        # Not computed and pipeline not running - waiting for pipeline to start
+        return jsonify({
+            'exists': False,
+            'computing': False,
+            'waiting': True,
+            'message': 'Waiting for pipeline to compute PCA...'
+        })
 
     except Exception as e:
         logger.error(f"[PCA] Status error: {e}")
