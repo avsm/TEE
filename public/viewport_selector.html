@@ -1312,7 +1312,7 @@
                         loadViewports(); // Refresh viewport list
                     }, 2000);
 
-                    // Second cleanup after 5 seconds to catch files from still-running downloads
+                    // Second cleanup after 3 minutes to catch files from still-running downloads
                     setTimeout(async () => {
                         try {
                             await fetch(`/api/viewports/${cancelledViewport}/cancel-processing`, { method: 'POST' });
@@ -1320,7 +1320,7 @@
                         } catch (e) {
                             // Ignore errors on secondary cleanup
                         }
-                    }, 5000);
+                    }, 180000);
                 } else {
                     alert(result.message || 'Failed to cancel processing');
                 }
