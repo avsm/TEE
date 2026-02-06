@@ -787,6 +787,113 @@ def api_pipeline_status(viewport_name):
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
+@app.route('/api/viewports/<viewport_name>/cancel-processing', methods=['POST'])
+def api_cancel_processing(viewport_name):
+    """Cancel viewport processing pipeline and clean up all generated files."""
+    try:
+        import glob
+        import shutil
+
+        operation_id = f"{viewport_name}_full_pipeline"
+        deleted_items = []
+
+        with tasks_lock:
+            if operation_id in tasks:
+                current_status = tasks[operation_id].get('status')
+                if current_status in ('starting', 'in_progress'):
+                    tasks[operation_id] = {
+                        'status': 'cancelled',
+                        'current_stage': 'cancelled',
+                        'error': 'Cancelled by user'
+                    }
+                    logger.info(f"[PIPELINE] Cancelled processing for viewport '{viewport_name}'")
+                else:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Cannot cancel - status is: {current_status}'
+                    }), 400
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': 'No active processing found for this viewport'
+                }), 404
+
+        # Clean up progress files
+        progress_patterns = [
+            f"/tmp/{viewport_name}_progress.json",
+            f"/tmp/{viewport_name}_*_progress.json"
+        ]
+        for pattern in progress_patterns:
+            for f in glob.glob(pattern):
+                try:
+                    Path(f).unlink()
+                    deleted_items.append(f"progress: {Path(f).name}")
+                except:
+                    pass
+
+        # Delete mosaic files
+        if MOSAICS_DIR.exists():
+            for mosaic_file in MOSAICS_DIR.glob(f'{viewport_name}_*.tif'):
+                try:
+                    mosaic_file.unlink()
+                    deleted_items.append(f"mosaic: {mosaic_file.name}")
+                except:
+                    pass
+
+            # Delete RGB mosaics
+            rgb_dir = MOSAICS_DIR / 'rgb'
+            if rgb_dir.exists():
+                for rgb_file in rgb_dir.glob(f'{viewport_name}_*.tif'):
+                    try:
+                        rgb_file.unlink()
+                        deleted_items.append(f"RGB: {rgb_file.name}")
+                    except:
+                        pass
+
+        # Delete pyramids directory
+        if PYRAMIDS_DIR.exists():
+            viewport_pyramids_dir = PYRAMIDS_DIR / viewport_name
+            if viewport_pyramids_dir.exists():
+                try:
+                    shutil.rmtree(viewport_pyramids_dir)
+                    deleted_items.append(f"pyramids: {viewport_name}/")
+                except:
+                    pass
+
+        # Delete FAISS directory
+        if FAISS_INDICES_DIR.exists():
+            faiss_viewport_dir = FAISS_INDICES_DIR / viewport_name
+            if faiss_viewport_dir.exists():
+                try:
+                    shutil.rmtree(faiss_viewport_dir)
+                    deleted_items.append(f"FAISS: {viewport_name}/")
+                except:
+                    pass
+
+        # Delete viewport config and definition files
+        viewports_dir = Path(__file__).parent.parent / 'viewports'
+        for pattern in [f'{viewport_name}.txt', f'{viewport_name}_config.json']:
+            filepath = viewports_dir / pattern
+            if filepath.exists():
+                try:
+                    filepath.unlink()
+                    deleted_items.append(f"config: {pattern}")
+                except:
+                    pass
+
+        logger.info(f"[CANCEL] Cleaned up {len(deleted_items)} items for '{viewport_name}'")
+
+        return jsonify({
+            'success': True,
+            'message': f'Processing cancelled for {viewport_name}',
+            'deleted_items': deleted_items
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error cancelling processing: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
 @app.route('/api/viewports/delete', methods=['POST'])
 def api_delete_viewport():
     """Delete a viewport and all associated data."""

@@ -500,7 +500,10 @@
 
                 <!-- Processing Status -->
                 <div class="section" id="processingSection" style="display: none; background: #f0f4ff; padding: 12px; border-radius: 6px; border-left: 3px solid #667eea;">
-                    <div style="font-size: 12px; color: #667eea; font-weight: 600; margin-bottom: 8px;">Processing Viewport</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-size: 12px; color: #667eea; font-weight: 600;">Processing Viewport</div>
+                        <button id="cancelProcessingBtn" onclick="cancelProcessing()" style="padding: 4px 10px; font-size: 11px; background: #ff5252; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    </div>
                     <div id="processingViewportName" style="font-size: 14px; font-weight: 600; color: #333; margin-bottom: 6px;"></div>
                     <div style="background: #e0e0e0; border-radius: 4px; height: 10px; overflow: hidden; margin-bottom: 6px;">
                         <div id="processingProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #667eea, #764ba2); transition: width 0.3s ease;"></div>
@@ -1175,6 +1178,50 @@
                 }
             } catch (error) {
                 console.error('Error checking data status:', error);
+            }
+        }
+
+        // Cancel processing for the active viewport
+        async function cancelProcessing() {
+            if (!activeProgressViewport) {
+                alert('No viewport is currently being processed');
+                return;
+            }
+
+            if (!confirm(`Cancel processing for "${activeProgressViewport}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/viewports/${activeProgressViewport}/cancel-processing`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    // Stop polling
+                    if (activeProgressPollInterval) {
+                        clearInterval(activeProgressPollInterval);
+                        activeProgressPollInterval = null;
+                    }
+
+                    // Update UI
+                    document.getElementById('processingStage').textContent = '❌ Cancelled';
+                    document.getElementById('processingMessage').textContent = 'Processing was cancelled by user';
+                    document.getElementById('cancelProcessingBtn').style.display = 'none';
+
+                    // Hide processing section after a delay
+                    setTimeout(() => {
+                        document.getElementById('processingSection').style.display = 'none';
+                        activeProgressViewport = null;
+                        loadViewports(); // Refresh viewport list
+                    }, 2000);
+                } else {
+                    alert(result.message || 'Failed to cancel processing');
+                }
+            } catch (error) {
+                console.error('Error cancelling processing:', error);
+                alert('Error cancelling processing: ' + error.message);
             }
         }
 
