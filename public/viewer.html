@@ -238,14 +238,40 @@
             height: 100%;
             min-width: 0;  /* Allow shrinking */
             overflow: hidden;  /* Clip content that overflows during resize */
+            cursor: crosshair;
         }
 
-        #map-embedding {
-            cursor: crosshair !important;
+        /* Hand cursor when dragging/panning */
+        .leaflet-dragging .map,
+        .leaflet-dragging .leaflet-container {
+            cursor: grabbing !important;
         }
 
-        #map-rgb {
-            cursor: crosshair !important;
+        /* Also apply to Three.js canvas in Panel 4 */
+        .map canvas {
+            cursor: crosshair;
+        }
+
+        /* Crisp pixelated tiles for embedding panels (no blur at high zoom) */
+        /* From Leaflet issue #5883 - comprehensive nearest-neighbor override */
+        #map-embedding.leaflet-container .leaflet-tile-pane img,
+        #map-embedding2.leaflet-container .leaflet-tile-pane img,
+        #map-embedding .leaflet-tile,
+        #map-embedding2 .leaflet-tile {
+            max-width: none !important;
+            image-rendering: optimizeSpeed !important;
+            image-rendering: -moz-crisp-edges !important;
+            image-rendering: -o-crisp-edges !important;
+            image-rendering: -webkit-optimize-contrast !important;
+            image-rendering: optimize-contrast !important;
+            image-rendering: crisp-edges !important;
+            image-rendering: pixelated !important;
+            -ms-interpolation-mode: nearest-neighbor !important;
+        }
+
+        /* Ensure triangle markers appear above canvas layers */
+        .triangle-marker {
+            z-index: 1000 !important;
         }
 
         #status {
@@ -470,7 +496,7 @@
                     <option value="umap">UMAP (slow)</option>
                 </select>
             </div>
-            <div id="map-umap" class="map" style="cursor: crosshair;"></div>
+            <div id="map-umap" class="map"></div>
         </div>
 
         <!-- Panel 5: Distance Heatmap -->
@@ -492,7 +518,7 @@
                 <select id="embedding-year-selector-2" style="display: none; margin-left: 10px; padding: 4px 8px; border: 1px solid #555; border-radius: 3px; background: #333; color: #fff; font-size: 13px;">
                 </select>
             </div>
-            <div id="map-embedding2" class="map" style="cursor: crosshair;"></div>
+            <div id="map-embedding2" class="map"></div>
         </div>
     </div>
 
@@ -630,7 +656,8 @@
                 zoom: zoom,
                 zoomControl: true,
                 minZoom: 6,
-                maxZoom: 18
+                maxZoom: 18,
+                doubleClickZoom: false  // We use dblclick for similarity search
             });
 
             // Apply same bounds as embedding/RGB maps so all maps stay in sync
@@ -650,16 +677,16 @@
                 zoom: zoom,
                 zoomControl: true,
                 minZoom: 6,
-                maxZoom: 17
+                maxZoom: 17,
+                doubleClickZoom: false  // We use dblclick for similarity search
             });
 
-            let embeddingLayer = L.tileLayer(`${TILE_SERVER}/tiles/${currentViewportName}/${currentEmbeddingYear}/{z}/{x}/{y}.png`, {
+            let embeddingLayer = L.pixelatedTileLayer(`${TILE_SERVER}/tiles/${currentViewportName}/${currentEmbeddingYear}/{z}/{x}/{y}.png`, {
                 attribution: 'Tessera Embeddings',
                 opacity: 1.0,
                 maxZoom: 17,
                 minZoom: 6,
-                tileSize: 2048,
-                zoomOffset: -3
+                tileSize: 256
             }).addTo(maps.embedding);
 
             // Clip embedding map to viewport bounds
@@ -674,7 +701,8 @@
                 zoom: zoom,
                 zoomControl: true,
                 minZoom: 6,
-                maxZoom: 17
+                maxZoom: 17,
+                doubleClickZoom: false  // We use dblclick for similarity search
             });
 
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -698,7 +726,8 @@
                 zoom: zoom,
                 zoomControl: true,
                 minZoom: 6,
-                maxZoom: 17
+                maxZoom: 17,
+                doubleClickZoom: false  // We use dblclick for similarity search
             });
 
             // No background layer for heatmap - pure color visualization
@@ -725,15 +754,15 @@
                 zoom: zoom,
                 zoomControl: true,
                 minZoom: 6,
-                maxZoom: 17
+                maxZoom: 17,
+                doubleClickZoom: false  // We use dblclick for similarity search
             });
 
-            let embedding2Layer = L.tileLayer(`${TILE_SERVER}/tiles/${currentViewportName}/${currentEmbeddingYear2}/{z}/{x}/{y}.png`, {
+            let embedding2Layer = L.pixelatedTileLayer(`${TILE_SERVER}/tiles/${currentViewportName}/${currentEmbeddingYear2}/{z}/{x}/{y}.png`, {
                 attribution: 'Tessera Embeddings',
                 opacity: 1.0,
                 maxZoom: 17,
-                tileSize: 2048,
-                zoomOffset: -3
+                tileSize: 256
             }).addTo(maps.embedding2);
 
             if (viewportBounds) {
@@ -743,38 +772,32 @@
 
             window.embedding2Layer = embedding2Layer;
 
-            // Add click handlers
+            // Click handling with dblclick detection
+            // We need to delay single-click to distinguish from double-click
+            let clickTimeout = null;
+
             Object.keys(maps).forEach(panel => {
                 maps[panel].on('click', function(e) {
-                    if (panel === 'heatmap') {
-                        console.log(`[CLICK] Heatmap Panel at ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
-                        showDistanceAtPoint(e.latlng.lat, e.latlng.lng);
-                    } else if (panel === 'embedding2') {
-                        console.log(`[CLICK] Panel 6 at ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
-                        // Could implement similar search for panel 6 or just show info
-                    } else {
-                        // Geographic panels
-                        console.log(`[CLICK] Panel: ${panel}, Location: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`);
-
-                        if (panel === 'osm') {
-                            // Panel 1: show markers on Panels 2, 3, 4, 5, and 6
-                            clearCrossPanelMarkers();
-                            setCrossPanelMarker('rgb', e.latlng.lat, e.latlng.lng);
-                            setCrossPanelMarker('embedding', e.latlng.lat, e.latlng.lng);
-                            setCrossPanelMarker('heatmap', e.latlng.lat, e.latlng.lng);
-                            setCrossPanelMarker('embedding2', e.latlng.lat, e.latlng.lng);
-                            highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
-                        } else if (panel === 'embedding') {
-                            // Panel 3: clear any Panel 1 markers, then similarity search + marker on Panel 1 + UMAP highlight
-                            clearCrossPanelMarkers();
-                            explorerClick(e.latlng.lat, e.latlng.lng);
-                            setCrossPanelMarker('osm', e.latlng.lat, e.latlng.lng);
-                            highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
-                        } else if (panel === 'rgb') {
-                            // Panel 2: UMAP highlight
-                            highlightUMAPPoint(e.latlng.lat, e.latlng.lng);
-                        }
+                    // Clear any pending click - might be start of double-click
+                    if (clickTimeout) {
+                        clearTimeout(clickTimeout);
+                        clickTimeout = null;
                     }
+                    // Delay single-click action to allow dblclick to cancel it
+                    clickTimeout = setTimeout(() => {
+                        handleUnifiedClick(e.latlng.lat, e.latlng.lng);
+                        clickTimeout = null;
+                    }, 250);
+                });
+
+                // Double-click triggers similarity search
+                maps[panel].on('dblclick', function(e) {
+                    // Cancel pending single-click
+                    if (clickTimeout) {
+                        clearTimeout(clickTimeout);
+                        clickTimeout = null;
+                    }
+                    handleSimilaritySearch(e.latlng.lat, e.latlng.lng);
                 });
             });
 
@@ -828,14 +851,11 @@
                     if (embeddingLayer) {
                         maps.embedding.removeLayer(embeddingLayer);
                     }
-                    embeddingLayer = L.tileLayer(
+                    embeddingLayer = L.pixelatedTileLayer(
                         `${TILE_SERVER}/tiles/${currentViewportName}/${currentEmbeddingYear}/{z}/{x}/{y}.png`,
                         {
-                            tileSize: 2048,
-                            zoomOffset: -3,
-                            bounds: viewportBounds,
-                            maxNativeZoom: 14,
-                            minNativeZoom: 3
+                            tileSize: 256,
+                            bounds: viewportBounds
                         }
                     );
                     embeddingLayer.addTo(maps.embedding);
@@ -858,14 +878,11 @@
             }
 
             // Create new layer with selected year
-            window.embeddingLayer = L.tileLayer(
+            window.embeddingLayer = L.pixelatedTileLayer(
                 `${TILE_SERVER}/tiles/${currentViewportName}/${currentEmbeddingYear}/{z}/{x}/{y}.png`,
                 {
-                    tileSize: 2048,
-                    zoomOffset: -3,
-                    bounds: viewportBounds,
-                    maxNativeZoom: 14,
-                    minNativeZoom: 3
+                    tileSize: 256,
+                    bounds: viewportBounds
                 }
             );
 
@@ -981,14 +998,11 @@
                     if (window.embedding2Layer) {
                         maps.embedding2.removeLayer(window.embedding2Layer);
                     }
-                    window.embedding2Layer = L.tileLayer(
+                    window.embedding2Layer = L.pixelatedTileLayer(
                         `${TILE_SERVER}/tiles/${currentViewportName}/${currentEmbeddingYear2}/{z}/{x}/{y}.png`,
                         {
-                            tileSize: 2048,
-                            zoomOffset: -3,
-                            bounds: viewportBounds,
-                            maxNativeZoom: 14,
-                            minNativeZoom: 3
+                            tileSize: 256,
+                            bounds: viewportBounds
                         }
                     );
                     window.embedding2Layer.addTo(maps.embedding2);
@@ -1009,14 +1023,11 @@
             }
 
             // Create new layer with selected year
-            window.embedding2Layer = L.tileLayer(
+            window.embedding2Layer = L.pixelatedTileLayer(
                 `${TILE_SERVER}/tiles/${currentViewportName}/${currentEmbeddingYear2}/{z}/{x}/{y}.png`,
                 {
-                    tileSize: 2048,
-                    zoomOffset: -3,
-                    bounds: viewportBounds,
-                    maxNativeZoom: 14,
-                    minNativeZoom: 3
+                    tileSize: 256,
+                    bounds: viewportBounds
                 }
             );
 
@@ -1027,29 +1038,33 @@
             loadHeatmap();
         }
 
-        // Synchronize all maps
+        // Synchronize all maps - any panel can trigger sync to all others
         function syncMaps() {
             let syncing = false;
+            const geoPanels = ['osm', 'embedding', 'rgb', 'heatmap', 'embedding2'];
 
-            function doSync() {
+            function doSync(sourcePanel) {
                 if (syncing) return;
                 syncing = true;
 
-                const osmCenter = maps.osm.getCenter();
-                const osmZoom = maps.osm.getZoom();
+                const sourceMap = maps[sourcePanel];
+                const center = sourceMap.getCenter();
+                const zoom = sourceMap.getZoom();
 
-                // Sync all geographic panels to OSM (not UMAP)
-                ['embedding', 'rgb', 'heatmap', 'embedding2'].forEach(panel => {
-                    maps[panel].setView(osmCenter, osmZoom, {animate: false});
+                // Sync all other geographic panels (not Panel 4 which is Three.js)
+                geoPanels.forEach(panel => {
+                    if (panel !== sourcePanel) {
+                        maps[panel].setView(center, zoom, {animate: false});
+                    }
                 });
 
                 syncing = false;
             }
 
-            // Sync when OSM moves or zooms
-            maps.osm.on('move zoom', doSync);
-
-            // Add mousemove handler to embedding map (no longer needed without labeling mode)
+            // Each geographic panel can trigger sync
+            geoPanels.forEach(panel => {
+                maps[panel].on('move zoom', () => doSync(panel));
+            });
         }
 
         // Add marker
@@ -1221,7 +1236,7 @@
         let crossPanelMarkers = {osm: null, rgb: null, embedding: null, heatmap: null, embedding2: null};
 
         const TRIANGLE_ICON = L.divIcon({
-            className: '',
+            className: 'triangle-marker',
             html: '<svg width="20" height="20" viewBox="0 0 20 20" style="overflow:visible;"><polygon points="0,0 20,0 10,20" fill="#FFD700" stroke="#FF8C00" stroke-width="2" stroke-linejoin="round"/></svg>',
             iconSize: [20, 20],
             iconAnchor: [10, 20]  // Tip of triangle anchored to the coordinate
@@ -1241,6 +1256,35 @@
                     crossPanelMarkers[key] = null;
                 }
             }
+        }
+
+        // Unified click handler: places marker on ALL panels at the same location
+        function handleUnifiedClick(lat, lon) {
+            console.log(`[CLICK] Unified click at ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+
+            // Clear all existing markers
+            clearCrossPanelMarkers();
+
+            // Place marker on all geographic panels
+            ['osm', 'rgb', 'embedding', 'heatmap', 'embedding2'].forEach(panel => {
+                setCrossPanelMarker(panel, lat, lon);
+            });
+
+            // Highlight nearest point in Panel 4 (PCA/UMAP)
+            highlightUMAPPoint(lat, lon);
+        }
+
+        // Double-click handler: triggers similarity search, shows results on Panel 2 AND Panel 4
+        async function handleSimilaritySearch(lat, lon) {
+            console.log(`[DBLCLICK] Similarity search at ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+
+            // First, place markers at the search location
+            handleUnifiedClick(lat, lon);
+
+            // Then trigger similarity search (results shown on Panel 2)
+            await explorerClick(lat, lon);
+
+            // Panel 4 highlighting is handled by updateExplorerVisualization()
         }
 
         // Create a new label
@@ -1775,9 +1819,12 @@
             // Clear cross-panel triangle markers
             clearCrossPanelMarkers();
 
-            // Clear UMAP highlight marker
+            // Clear UMAP highlight marker and similarity highlighting
             if (umapCanvasLayer) {
                 umapCanvasLayer.setHighlight(null);
+                if (umapCanvasLayer.clearSimilarityHighlight) {
+                    umapCanvasLayer.clearSimilarityHighlight();
+                }
             }
 
             // Clear search cache for persistent labels
@@ -1959,28 +2006,36 @@
         function visualizeExplorerResults(matches) {
             if (matches.length === 0) {
                 console.log('[EXPLORER] No matches to visualize');
+                // Clear Panel 4 highlighting if no matches
+                if (umapCanvasLayer && umapCanvasLayer.clearSimilarityHighlight) {
+                    umapCanvasLayer.clearSimilarityHighlight();
+                }
                 return;
             }
 
             // If canvas layer exists (slider change), just update matches
             if (explorerCanvasLayer) {
                 explorerCanvasLayer.updateMatches(matches);
-                return;
+            } else {
+                // New search: create canvas layer and layer group
+                const layerGroup = L.layerGroup();
+
+                // Create and add canvas layer to RGB (Bing satellite) panel
+                explorerCanvasLayer = new DirectCanvasLayer(matches, maps.rgb);
+                layerGroup.addLayer(explorerCanvasLayer);
+
+                // Add to RGB panel with 50% opacity
+                layerGroup.addTo(maps.rgb);
+                explorerVisualization = layerGroup;
+
+                // Add source pixel marker to RGB panel
+                visualizeSourcePixel(explorerResults.sourcePixel.lat, explorerResults.sourcePixel.lon, layerGroup);
             }
 
-            // New search: create canvas layer and layer group
-            const layerGroup = L.layerGroup();
-
-            // Create and add canvas layer to RGB (Bing satellite) panel
-            explorerCanvasLayer = new DirectCanvasLayer(matches, maps.rgb);
-            layerGroup.addLayer(explorerCanvasLayer);
-
-            // Add to RGB panel with 50% opacity
-            layerGroup.addTo(maps.rgb);
-            explorerVisualization = layerGroup;
-
-            // Add source pixel marker to RGB panel
-            visualizeSourcePixel(explorerResults.sourcePixel.lat, explorerResults.sourcePixel.lon, layerGroup);
+            // Also highlight matches in Panel 4 (PCA/UMAP)
+            if (umapCanvasLayer && umapCanvasLayer.highlightSimilarPoints) {
+                umapCanvasLayer.highlightSimilarPoints(matches);
+            }
         }
 
 // Custom canvas layer for direct pixel rendering
@@ -2614,10 +2669,12 @@
                 this._canvas.style.position = 'absolute';
                 this._canvas.style.top = '0';
                 this._canvas.style.left = '0';
-                this._canvas.style.zIndex = '500';  // Below Leaflet marker pane (600) so markers render on top
                 this._canvas.style.opacity = '1.0';  // Full opacity for vivid color display
                 this._canvas.style.pointerEvents = 'none';  // Allow clicks to pass through
-                map.getContainer().appendChild(this._canvas);
+
+                // Insert at START of container so Leaflet panes (including markers) render on top
+                const container = map.getContainer();
+                container.insertBefore(this._canvas, container.firstChild);
 
                 this._ctx = this._canvas.getContext('2d');
 
@@ -2811,6 +2868,13 @@
                     }
 
                     umapCanvasLayer = new window.UMAPScene('map-umap', umapData);
+
+                    // Ensure correct size after layout
+                    setTimeout(() => {
+                        if (umapCanvasLayer && umapCanvasLayer.resize) {
+                            umapCanvasLayer.resize();
+                        }
+                    }, 50);
 
                     // Apply labels if they were loaded before
                     if (savedLabels && savedLabels.length > 0) {
@@ -3021,6 +3085,20 @@
             // Then create maps with correct viewport
             createMaps();
             restorePanelMode();  // Restore 3/6 panel preference
+
+            // Invalidate map sizes after layout is applied
+            setTimeout(() => {
+                Object.values(maps).forEach(map => {
+                    if (map && map.invalidateSize) {
+                        map.invalidateSize();
+                    }
+                });
+                // Also resize Three.js scene (Panel 4)
+                if (umapCanvasLayer && umapCanvasLayer.resize) {
+                    umapCanvasLayer.resize();
+                }
+            }, 100);
+
             await loadAvailableYears();  // Panel 3: Load year selector
             await loadAvailableYears2(); // Panel 6: Load second year selector
             loadLabels();
@@ -3056,7 +3134,7 @@
                 });
         };
 
-        // Handle window resize - invalidate all Leaflet maps
+        // Handle window resize - invalidate all Leaflet maps and Three.js scene
         let resizeTimeout;
         window.addEventListener('resize', function() {
             clearTimeout(resizeTimeout);
@@ -3067,6 +3145,10 @@
                         map.invalidateSize();
                     }
                 });
+                // Resize Three.js scene (Panel 4)
+                if (umapCanvasLayer && umapCanvasLayer.resize) {
+                    umapCanvasLayer.resize();
+                }
             }, 100);  // Debounce to avoid excessive calls
         });
 
@@ -3526,6 +3608,75 @@
         });
 
         // ===== END PERSISTENT LABEL SYSTEM =====
+
+        // Expose functions to window for Three.js module access
+        window.handleUnifiedClick = handleUnifiedClick;
+        window.handleSimilaritySearch = handleSimilaritySearch;
+        window.clearCrossPanelMarkers = clearCrossPanelMarkers;
+        window.setCrossPanelMarker = setCrossPanelMarker;
+    </script>
+
+    <!-- ===== Pixelated Canvas Tile Layer ===== -->
+    <script>
+    // Custom tile layer that uses canvas with imageSmoothingEnabled = false
+    // This guarantees crisp nearest-neighbor scaling regardless of CSS
+    L.PixelatedTileLayer = L.GridLayer.extend({
+        options: {
+            tileSize: 256,
+            crossOrigin: true
+        },
+
+        initialize: function(urlTemplate, options) {
+            this._url = urlTemplate;
+            L.setOptions(this, options);
+        },
+
+        createTile: function(coords, done) {
+            const tile = document.createElement('canvas');
+            const tileSize = this.getTileSize();
+            tile.width = tileSize.x;
+            tile.height = tileSize.y;
+
+            const ctx = tile.getContext('2d');
+            // CRITICAL: Disable image smoothing for crisp pixels
+            ctx.imageSmoothingEnabled = false;
+            ctx.webkitImageSmoothingEnabled = false;
+            ctx.mozImageSmoothingEnabled = false;
+            ctx.msImageSmoothingEnabled = false;
+
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+
+            img.onload = () => {
+                // Re-apply after image load (some browsers reset it)
+                ctx.imageSmoothingEnabled = false;
+                ctx.webkitImageSmoothingEnabled = false;
+                ctx.mozImageSmoothingEnabled = false;
+                ctx.msImageSmoothingEnabled = false;
+
+                // Draw image scaled to tile size - canvas will use nearest-neighbor
+                ctx.drawImage(img, 0, 0, tileSize.x, tileSize.y);
+                done(null, tile);
+            };
+
+            img.onerror = () => {
+                done(new Error('Tile load error'), tile);
+            };
+
+            // Build URL from template
+            const url = this._url
+                .replace('{z}', coords.z)
+                .replace('{x}', coords.x)
+                .replace('{y}', coords.y);
+            img.src = url;
+
+            return tile;
+        }
+    });
+
+    L.pixelatedTileLayer = function(urlTemplate, options) {
+        return new L.PixelatedTileLayer(urlTemplate, options);
+    };
     </script>
 
     <!-- ===== 3D UMAP Scene (Three.js) — Panel 4 only ===== -->
@@ -3622,8 +3773,15 @@
             this.controls.minDistance   = 0.3;
             this.controls.maxDistance   = 8.0;
 
+            // Swap mouse buttons: left-drag = pan, right-drag = rotate
+            this.controls.mouseButtons = {
+                LEFT: THREE.MOUSE.PAN,
+                MIDDLE: THREE.MOUSE.DOLLY,
+                RIGHT: THREE.MOUSE.ROTATE
+            };
+
             // ── highlight sphere (gold, placed on click / highlightUMAPPoint) ──
-            const sphereGeo = new THREE.SphereGeometry(0.012, 12, 12);
+            const sphereGeo = new THREE.SphereGeometry(0.035, 16, 16);
             const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
             this.highlightSphere = new THREE.Mesh(sphereGeo, sphereMat);
             this.highlightSphere.visible = false;
@@ -3634,9 +3792,17 @@
             this.raycaster.params.Points.threshold = 0.015;
             this._mouse = new THREE.Vector2();
 
-            this._onClickBound   = this._onClick.bind(this);
-            this._onResizeBound = this._onResize.bind(this);
+            this._onClickBound    = this._onClick.bind(this);
+            this._onDblClickBound = this._onDblClick.bind(this);
+            this._onResizeBound   = this._onResize.bind(this);
+            this._onMouseDownBound = () => { this.renderer.domElement.style.cursor = 'grabbing'; };
+            this._onMouseUpBound   = () => { this.renderer.domElement.style.cursor = 'crosshair'; };
+
             this.renderer.domElement.addEventListener('click', this._onClickBound);
+            this.renderer.domElement.addEventListener('dblclick', this._onDblClickBound);
+            this.renderer.domElement.addEventListener('mousedown', this._onMouseDownBound);
+            this.renderer.domElement.addEventListener('mouseup', this._onMouseUpBound);
+            this.renderer.domElement.addEventListener('mouseleave', this._onMouseUpBound);
             window.addEventListener('resize', this._onResizeBound);
 
             // ── animation loop ───────────────────────────────────────
@@ -3702,11 +3868,65 @@
             this.geometry.attributes.color.needsUpdate = true;
         }
 
+        /**
+         * Highlight points matching similarity search results.
+         * Matches are colored yellow (same as Panel 2), others stay gray.
+         * @param {Array<{lat, lon, distance}>} matches - Similarity search results
+         */
+        highlightSimilarPoints(matches) {
+            // Build a lat/lon set of matching points (keyed to 6 dp for speed)
+            const matchSet = new Set();
+            for (const m of matches) {
+                const key = m.lat.toFixed(6) + ',' + m.lon.toFixed(6);
+                matchSet.add(key);
+            }
+
+            // Yellow color for matches (same as Panel 2: #FFFF00)
+            const highlightRGB = [1.0, 1.0, 0.0];  // Yellow
+            const grayRGB = [0.53, 0.53, 0.53];    // Gray for non-matches
+
+            const c = this.colors;
+            const n = this.points.length;
+            for (let i = 0; i < n; i++) {
+                const key = this.points[i].lat.toFixed(6) + ',' + this.points[i].lon.toFixed(6);
+                if (matchSet.has(key)) {
+                    c[i * 3]     = highlightRGB[0];
+                    c[i * 3 + 1] = highlightRGB[1];
+                    c[i * 3 + 2] = highlightRGB[2];
+                } else {
+                    c[i * 3]     = grayRGB[0];
+                    c[i * 3 + 1] = grayRGB[1];
+                    c[i * 3 + 2] = grayRGB[2];
+                }
+            }
+
+            this.geometry.attributes.color.needsUpdate = true;
+            console.log(`[UMAPScene] Highlighted ${matchSet.size} similar points`);
+        }
+
+        /**
+         * Clear similarity highlighting and restore to gray.
+         */
+        clearSimilarityHighlight() {
+            const c = this.colors;
+            const n = this.points.length;
+            for (let i = 0; i < n; i++) {
+                c[i * 3]     = 0.53;
+                c[i * 3 + 1] = 0.53;
+                c[i * 3 + 2] = 0.53;
+            }
+            this.geometry.attributes.color.needsUpdate = true;
+        }
+
         /** Release GPU & DOM resources. */
         dispose() {
             this.disposed = true;
             if (this._animId !== null) cancelAnimationFrame(this._animId);
             this.renderer.domElement.removeEventListener('click', this._onClickBound);
+            this.renderer.domElement.removeEventListener('dblclick', this._onDblClickBound);
+            this.renderer.domElement.removeEventListener('mousedown', this._onMouseDownBound);
+            this.renderer.domElement.removeEventListener('mouseup', this._onMouseUpBound);
+            this.renderer.domElement.removeEventListener('mouseleave', this._onMouseUpBound);
             window.removeEventListener('resize', this._onResizeBound);
             this.geometry.dispose();
             this.material.dispose();
@@ -3727,7 +3947,7 @@
         }
 
         _onClick(e) {
-            // Ignore if user was dragging (OrbitControls sets pointer capture)
+            // Raycast to find clicked point
             const rect = this.renderer.domElement.getBoundingClientRect();
             this._mouse.x =  ((e.clientX - rect.left)  / rect.width)  * 2 - 1;
             this._mouse.y = -((e.clientY - rect.top)   / rect.height) * 2 + 1;
@@ -3742,17 +3962,38 @@
                 // Move highlight sphere
                 this.setHighlight(hitPoint);
 
-                // Cross-panel markers via the main script's globals
-                if (typeof window.clearCrossPanelMarkers === 'function') {
-                    window.clearCrossPanelMarkers();
-                }
-                if (typeof window.setCrossPanelMarker === 'function') {
-                    ['osm', 'rgb', 'embedding', 'heatmap', 'embedding2'].forEach(panel => {
-                        window.setCrossPanelMarker(panel, hitPoint.lat, hitPoint.lon);
-                    });
+                // Use unified click handler to place markers on all panels
+                if (typeof window.handleUnifiedClick === 'function') {
+                    window.handleUnifiedClick(hitPoint.lat, hitPoint.lon);
                 }
                 console.log(`[UMAPScene] Click → lat=${hitPoint.lat.toFixed(6)} lon=${hitPoint.lon.toFixed(6)}`);
             }
+        }
+
+        _onDblClick(e) {
+            // Raycast to find double-clicked point
+            const rect = this.renderer.domElement.getBoundingClientRect();
+            this._mouse.x =  ((e.clientX - rect.left)  / rect.width)  * 2 - 1;
+            this._mouse.y = -((e.clientY - rect.top)   / rect.height) * 2 + 1;
+
+            this.raycaster.setFromCamera(this._mouse, this.camera);
+            const intersects = this.raycaster.intersectObject(this.pointsMesh);
+
+            if (intersects.length > 0) {
+                const idx = intersects[0].index;
+                const hitPoint = this.points[idx];
+
+                // Use similarity search handler
+                if (typeof window.handleSimilaritySearch === 'function') {
+                    window.handleSimilaritySearch(hitPoint.lat, hitPoint.lon);
+                }
+                console.log(`[UMAPScene] DblClick → similarity search at lat=${hitPoint.lat.toFixed(6)} lon=${hitPoint.lon.toFixed(6)}`);
+            }
+        }
+
+        /** Public method to trigger resize (call after layout changes) */
+        resize() {
+            this._onResize();
         }
 
         _onResize() {

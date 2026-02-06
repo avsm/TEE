@@ -79,8 +79,8 @@ def tile_to_bbox(x, y, zoom):
 @app.route('/tiles/<viewport>/<map_id>/<int:z>/<int:x>/<int:y>.png')
 def get_tile(viewport, map_id, z, x, y):
     """Serve a map tile for a specific viewport."""
-    # Use larger tile size for native resolution
-    TILE_SIZE = 2048  # Larger tiles = minimal downsampling, near-native pixels
+    # Standard tile size - no browser scaling needed
+    TILE_SIZE = 256
 
     try:
         tif_path = get_reader(viewport, map_id, z)
@@ -93,29 +93,81 @@ def get_tile(viewport, map_id, z, x, y):
             buf.seek(0)
             return send_file(buf, mimetype='image/png')
 
-        # Get tile bounds
+        # Get tile bounds (lon_min, lat_min, lon_max, lat_max)
         bbox = tile_to_bbox(x, y, z)
 
-        # Read tile from GeoTIFF
-        with Reader(tif_path) as src:
-            # Try to read the tile
-            try:
-                img_data = src.part(bbox, width=TILE_SIZE, height=TILE_SIZE)
+        # Read tile from GeoTIFF using direct rasterio (no resampling blur)
+        import rasterio
+        from rasterio.windows import from_bounds
+
+        try:
+            with rasterio.open(tif_path) as src:
+                # Convert bbox to pixel window
+                window = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], src.transform)
+
+                # Get original requested window dimensions (before clamping)
+                orig_col_off = window.col_off
+                orig_row_off = window.row_off
+                orig_width = window.width
+                orig_height = window.height
+
+                # Round to integer pixels
+                col_off = int(round(orig_col_off))
+                row_off = int(round(orig_row_off))
+                width = int(round(orig_width))
+                height = int(round(orig_height))
+
+                if width <= 0 or height <= 0:
+                    # Zero-size window - return transparent
+                    img = Image.new('RGBA', (TILE_SIZE, TILE_SIZE), (0, 0, 0, 0))
+                    buf = io.BytesIO()
+                    img.save(buf, format='PNG')
+                    buf.seek(0)
+                    return send_file(buf, mimetype='image/png')
+
+                # Calculate clamped read window (what we can actually read)
+                read_col_off = max(0, col_off)
+                read_row_off = max(0, row_off)
+                read_col_end = min(src.width, col_off + width)
+                read_row_end = min(src.height, row_off + height)
+                read_width = read_col_end - read_col_off
+                read_height = read_row_end - read_row_off
+
+                if read_width <= 0 or read_height <= 0:
+                    # Completely outside bounds - return transparent
+                    img = Image.new('RGBA', (TILE_SIZE, TILE_SIZE), (0, 0, 0, 0))
+                    buf = io.BytesIO()
+                    img.save(buf, format='PNG')
+                    buf.seek(0)
+                    return send_file(buf, mimetype='image/png')
+
+                # Read the valid portion
+                pixel_window = rasterio.windows.Window(read_col_off, read_row_off, read_width, read_height)
+                data = src.read(window=pixel_window)
 
                 # Convert to RGB
-                if img_data.data.shape[0] == 1:
-                    # Single band - convert to grayscale
-                    arr = img_data.data[0]
-                    rgb = np.stack([arr, arr, arr], axis=0)
+                if data.shape[0] == 1:
+                    rgb = np.stack([data[0], data[0], data[0]], axis=0)
                 else:
-                    # Already RGB
-                    rgb = img_data.data[:3]
+                    rgb = data[:3]
+
+                # Calculate where to place data in the full tile
+                # If original col_off was negative, data starts at offset in tile
+                tile_x_start = max(0, -col_off)
+                tile_y_start = max(0, -row_off)
+
+                # Create full-size array for the requested window, filled with black
+                full_data = np.zeros((3, height, width), dtype=np.uint8)
+
+                # Place the read data at the correct position
+                full_data[:, tile_y_start:tile_y_start+read_height, tile_x_start:tile_x_start+read_width] = rgb
 
                 # Transpose to (H, W, C) for PIL
-                rgb_t = np.transpose(rgb, (1, 2, 0))
+                rgb_t = np.transpose(full_data, (1, 2, 0))
 
-                # Create PIL image
+                # Create PIL image and upscale to tile size with NEAREST (crisp pixels)
                 img = Image.fromarray(rgb_t.astype(np.uint8), mode='RGB')
+                img = img.resize((TILE_SIZE, TILE_SIZE), Image.NEAREST)
 
                 # Save to buffer
                 buf = io.BytesIO()
@@ -124,14 +176,14 @@ def get_tile(viewport, map_id, z, x, y):
 
                 return send_file(buf, mimetype='image/png')
 
-            except Exception as e:
-                # Return transparent tile on error
-                print(f"Error reading tile {map_id}/{z}/{x}/{y}: {e}")
-                img = Image.new('RGBA', (TILE_SIZE, TILE_SIZE), (0, 0, 0, 0))
-                buf = io.BytesIO()
-                img.save(buf, format='PNG')
-                buf.seek(0)
-                return send_file(buf, mimetype='image/png')
+        except Exception as e:
+            # Return transparent tile on error
+            print(f"Error reading tile {map_id}/{z}/{x}/{y}: {e}")
+            img = Image.new('RGBA', (TILE_SIZE, TILE_SIZE), (0, 0, 0, 0))
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            buf.seek(0)
+            return send_file(buf, mimetype='image/png')
 
     except Exception as e:
         print(f"Error serving tile: {e}")
