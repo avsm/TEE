@@ -5,6 +5,7 @@ Exposes viewport operations as HTTP endpoints.
 """
 
 import sys
+import os
 import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
@@ -2180,6 +2181,18 @@ def api_delete_viewport_label(viewport_name, label_id):
 
 
 # ============================================================================
+# CLIENT CONFIG
+# ============================================================================
+
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    """Return client configuration including tile server URL."""
+    return jsonify({
+        'tile_server': app.config.get('TILE_SERVER_URL', 'http://localhost:5125')
+    })
+
+
+# ============================================================================
 # STATIC FILES
 # ============================================================================
 
@@ -2220,7 +2233,16 @@ if __name__ == '__main__':
     parser.add_argument('--prod', action='store_true', help='Disable Flask debug mode for production use')
     parser.add_argument('--port', type=int, default=8001, help='Port to listen on (default: 8001)')
     parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
+    parser.add_argument('--tile-server', default=None,
+                        help='Tile server URL (default: http://localhost:5125, env: TILE_SERVER_URL)')
     args = parser.parse_args()
+
+    # Set tile server URL from CLI flag, env var, or default
+    app.config['TILE_SERVER_URL'] = (
+        args.tile_server
+        or os.environ.get('TILE_SERVER_URL')
+        or 'http://localhost:5125'
+    )
 
     debug = not args.prod
 
