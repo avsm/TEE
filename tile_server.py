@@ -269,12 +269,22 @@ def health():
     })
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Tessera Tile Server')
+    parser.add_argument('--prod', action='store_true', help='Disable Flask debug mode for production use')
+    parser.add_argument('--port', type=int, default=5125, help='Port to listen on (default: 5125)')
+    args = parser.parse_args()
+
+    debug = not args.prod
+
     print("Starting Tessera Tile Server...")
     print(f"Serving tiles from: {PYRAMIDS_BASE_DIR.absolute()}")
     print("Available endpoints:")
-    print("  - http://localhost:5125/tiles/<viewport>/<map_id>/<z>/<x>/<y>.png")
-    print("  - http://localhost:5125/bounds/<viewport>/<map_id>")
-    print("  - http://localhost:5125/health")
+    print(f"  - http://localhost:{args.port}/tiles/<viewport>/<map_id>/<z>/<x>/<y>.png")
+    print(f"  - http://localhost:{args.port}/bounds/<viewport>/<map_id>")
+    print(f"  - http://localhost:{args.port}/health")
     print("\nMap IDs: 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, satellite, rgb")
-    print("\nStarting server on http://localhost:5125")
-    app.run(debug=True, port=5125, threaded=True)
+    if debug:
+        print("\nDebug mode enabled (use --prod to disable)")
+    print(f"\nStarting server on http://localhost:{args.port}")
+    app.run(debug=debug, port=args.port, threaded=True)

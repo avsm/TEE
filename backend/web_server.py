@@ -2215,11 +2215,22 @@ def server_error(error):
 # ============================================================================
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Tessera Web Server')
+    parser.add_argument('--prod', action='store_true', help='Disable Flask debug mode for production use')
+    parser.add_argument('--port', type=int, default=8001, help='Port to listen on (default: 8001)')
+    parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
+    args = parser.parse_args()
+
+    debug = not args.prod
+
     print("Starting Blore Viewport Manager Web Server...")
-    print("Open http://localhost:8001 in your browser")
+    print(f"Open http://localhost:{args.port} in your browser")
+    if debug:
+        print("Debug mode enabled (use --prod to disable)")
     print("Press Ctrl+C to stop")
 
     # Initialize labels database
     init_labels_db()
 
-    app.run(debug=True, host='0.0.0.0', port=8001)
+    app.run(debug=debug, host=args.host, port=args.port)
