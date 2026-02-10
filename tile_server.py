@@ -17,12 +17,16 @@ import numpy as np
 # Add parent directory to path for lib imports
 sys.path.insert(0, str(Path(__file__).parent))
 from lib.config import DATA_DIR, PYRAMIDS_DIR
+from lib.viewport_utils import validate_viewport_name
 
 app = Flask(__name__)
 CORS(app)
 
 PYRAMIDS_BASE_DIR = PYRAMIDS_DIR
 YEARS = [str(y) for y in range(2017, 2026)] + ['satellite']
+
+# Allowed map_id values (years + special names)
+_VALID_MAP_IDS = {str(y) for y in range(2017, 2026)} | {'satellite', 'rgb'}
 
 # Cache for tile readers
 readers = {}
@@ -79,6 +83,13 @@ def tile_to_bbox(x, y, zoom):
 @app.route('/tiles/<viewport>/<map_id>/<int:z>/<int:x>/<int:y>.png')
 def get_tile(viewport, map_id, z, x, y):
     """Serve a map tile for a specific viewport."""
+    try:
+        validate_viewport_name(viewport)
+    except ValueError:
+        return "Invalid viewport name", 400
+    if map_id not in _VALID_MAP_IDS:
+        return "Invalid map_id", 400
+
     # Standard tile size - no browser scaling needed
     TILE_SIZE = 256
 
@@ -192,6 +203,12 @@ def get_tile(viewport, map_id, z, x, y):
 @app.route('/bounds/<viewport>/<map_id>')
 def get_bounds(viewport, map_id):
     """Get bounds for a map in a specific viewport."""
+    try:
+        validate_viewport_name(viewport)
+    except ValueError:
+        return jsonify({'error': 'Invalid viewport name'}), 400
+    if map_id not in _VALID_MAP_IDS:
+        return jsonify({'error': 'Invalid map_id'}), 400
     try:
         viewport_pyramids_dir = PYRAMIDS_BASE_DIR / viewport
 

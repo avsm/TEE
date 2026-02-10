@@ -5,6 +5,7 @@ Exposes viewport operations as HTTP endpoints.
 """
 
 import sys
+import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -26,7 +27,8 @@ from lib.viewport_utils import (
     get_active_viewport,
     get_active_viewport_name,
     list_viewports,
-    read_viewport_file
+    read_viewport_file,
+    validate_viewport_name
 )
 from lib.viewport_writer import set_active_viewport, clear_active_viewport, create_viewport_from_bounds
 from lib.pipeline import PipelineRunner, cancel_pipeline
@@ -355,6 +357,11 @@ def api_switch_viewport():
         if not viewport_name:
             return jsonify({'success': False, 'error': 'Viewport name required'}), 400
 
+        try:
+            validate_viewport_name(viewport_name)
+        except ValueError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
         set_active_viewport(viewport_name)
 
         # Get updated viewport info
@@ -441,6 +448,12 @@ def api_create_viewport():
         if not name:
             import time
             name = f"viewport_{int(time.time())}"
+
+        # Validate viewport name (whether user-provided or auto-generated)
+        try:
+            validate_viewport_name(name)
+        except ValueError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
 
         # Get selected years
         years = data.get('years')  # Will be list of integers or None
@@ -802,6 +815,10 @@ def api_operations_progress(operation_id):
     to provide unified progress tracking with full detail (current_file, bytes, etc.).
     """
     try:
+        # Validate operation_id to prevent path traversal in /tmp/ reads
+        if not re.match(r'^[A-Za-z0-9_-]+$', operation_id):
+            return jsonify({'success': False, 'error': 'Invalid operation_id'}), 400
+
         progress_file = Path(f"/tmp/{operation_id}_progress.json")
 
         if not progress_file.exists():
@@ -829,6 +846,10 @@ def api_operations_progress(operation_id):
 def api_pipeline_status(viewport_name):
     """Get status of viewport pipeline processing."""
     try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    try:
         operation_id = f"{viewport_name}_full_pipeline"
         with tasks_lock:
             if operation_id in tasks:
@@ -853,6 +874,10 @@ def api_pipeline_status(viewport_name):
 @app.route('/api/viewports/<viewport_name>/cancel-processing', methods=['POST'])
 def api_cancel_processing(viewport_name):
     """Cancel viewport processing pipeline and clean up all generated files."""
+    try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     try:
         import glob
         import shutil
@@ -998,12 +1023,13 @@ def api_delete_viewport():
         if not viewport_name:
             return jsonify({'success': False, 'error': 'Viewport name required'}), 400
 
+        try:
+            validate_viewport_name(viewport_name)
+        except ValueError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
         viewports_dir = Path(__file__).parent.parent / 'viewports'
         viewport_file = viewports_dir / f'{viewport_name}.txt'
-
-        # Don't allow deleting files outside viewports directory
-        if not viewport_file.resolve().parent == viewports_dir.resolve():
-            return jsonify({'success': False, 'error': 'Invalid viewport name'}), 400
 
         if not viewport_file.exists():
             return jsonify({'success': False, 'error': 'Viewport not found'}), 404
@@ -1139,6 +1165,10 @@ def api_delete_viewport():
 def api_get_available_years(viewport_name):
     """Get list of years with available data for a viewport."""
     try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    try:
         pyramid_years = []
         viewport_pyramids_dir = PYRAMIDS_DIR / viewport_name
         if viewport_pyramids_dir.exists():
@@ -1159,6 +1189,10 @@ def api_get_available_years(viewport_name):
 @app.route('/api/viewports/<viewport_name>/is-ready', methods=['GET'])
 def api_is_viewport_ready(viewport_name):
     """Simple synchronous check: is this viewport ready to view?"""
+    try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'ready': False, 'message': str(e)}), 400
     try:
         # Check FAISS (primary indicator - mosaics are deleted after FAISS creation)
         has_faiss = False
@@ -1396,6 +1430,8 @@ def api_search_similar_embeddings():
         threshold = float(data.get('threshold', 0.5))
         viewport_id = data.get('viewport_id') or get_active_viewport_name()
         year = int(data.get('year', 2024))  # Default to 2024
+
+        validate_viewport_name(viewport_id)
 
         if query_embedding.size != 128:
             return jsonify({
@@ -1693,6 +1729,10 @@ def api_compute_umap(viewport_name):
     """Compute UMAP 2D projection for all viewport embeddings."""
     """Load pre-computed UMAP coordinates for visualization."""
     try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    try:
         data = request.get_json()
         year = data.get('year', 2024)
 
@@ -1771,6 +1811,10 @@ def api_compute_umap(viewport_name):
 def api_compute_pca(viewport_name):
     """Load pre-computed PCA coordinates for visualization."""
     try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    try:
         data = request.get_json()
         year = data.get('year', 2024)
 
@@ -1846,6 +1890,10 @@ def api_compute_pca(viewport_name):
 def api_umap_status(viewport_name):
     """Check if UMAP exists. UMAP is computed by pipeline orchestration."""
     try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    try:
         year = request.args.get('year', '2024')
         faiss_dir = FAISS_INDICES_DIR / viewport_name / str(year)
         umap_file = faiss_dir / 'umap_coords.npy'
@@ -1879,6 +1927,10 @@ def api_umap_status(viewport_name):
 @app.route('/api/viewports/<viewport_name>/pca-status', methods=['GET'])
 def api_pca_status(viewport_name):
     """Check if PCA exists. PCA is computed by pipeline orchestration."""
+    try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     try:
         year = request.args.get('year', '2024')
         faiss_dir = FAISS_INDICES_DIR / viewport_name / str(year)
@@ -1927,6 +1979,8 @@ def api_distance_heatmap():
                 'success': False,
                 'error': 'viewport_id required'
             }), 400
+
+        validate_viewport_name(viewport_id)
 
         start_time = time.time()
         logger.info(f"[HEATMAP] Computing distance between {year1} and {year2} for {viewport_id}...")
@@ -2067,6 +2121,10 @@ def api_distance_heatmap():
 def api_get_viewport_labels(viewport_name):
     """Load all saved labels for a viewport from SQLite database."""
     try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    try:
         labels = get_labels(viewport_name)
         return jsonify({
             'success': True,
@@ -2081,6 +2139,10 @@ def api_get_viewport_labels(viewport_name):
 @app.route('/api/viewports/<viewport_name>/labels', methods=['POST'])
 def api_save_viewport_label(viewport_name):
     """Save a new label to SQLite database."""
+    try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     try:
         label_data = request.get_json()
         label_id = save_label(viewport_name, label_data)
@@ -2100,6 +2162,10 @@ def api_save_viewport_label(viewport_name):
 @app.route('/api/viewports/<viewport_name>/labels/<label_id>', methods=['DELETE'])
 def api_delete_viewport_label(viewport_name, label_id):
     """Delete a specific label from SQLite database."""
+    try:
+        validate_viewport_name(viewport_name)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     try:
         deleted = delete_label(viewport_name, label_id)
 
