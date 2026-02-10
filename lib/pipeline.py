@@ -607,13 +607,22 @@ class PipelineRunner:
             return False, "Cancelled by user"
         self.update_progress('pca', 100, "PCA ready")
 
-        # Stage 5: Compute UMAP (always run for 6-panel view precomputation)
+        # Stage 5: Compute UMAP (optional)
         # ✓ After this stage, UMAP visualization BECOMES AVAILABLE
         if check_cancelled():
             return False, "Cancelled by user"
-        self.update_progress('umap', 0, "Computing UMAP projection...")
-        success, error = self.stage_5_compute_umap(viewport_name, umap_year or "")
-        self.update_progress('umap', 100, "UMAP complete")
+        if compute_umap:
+            effective_umap_year = umap_year
+            if not effective_umap_year and years_str:
+                effective_umap_year = years_str.split(',')[0].strip()
+            if effective_umap_year:
+                self.update_progress('umap', 0, "Computing UMAP projection...")
+                success, error = self.stage_5_compute_umap(viewport_name, effective_umap_year)
+                self.update_progress('umap', 100, "UMAP complete")
+            else:
+                logger.warning(f"[PIPELINE] ⚠️  Stage 5 skipped - no year specified for UMAP")
+        else:
+            logger.info(f"[PIPELINE] Stage 5 skipped (compute_umap=False)")
 
         if check_cancelled():
             return False, "Cancelled by user"
