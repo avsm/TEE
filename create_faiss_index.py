@@ -60,8 +60,8 @@ def create_faiss_index_for_year(viewport_id, bounds, year):
 
     import faiss
 
-    # Initialize progress tracker - use pipeline progress file for single source of truth
-    progress = ProgressTracker(f"{viewport_id}_pipeline")
+    # Initialize progress tracker - use script-specific progress file to avoid conflicts with pipeline orchestrator
+    progress = ProgressTracker(f"{viewport_id}_faiss")
     progress.update("starting", f"Creating FAISS index for {viewport_id} ({year})...")
 
     # Find mosaic file (year-specific)

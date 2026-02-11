@@ -71,9 +71,10 @@ class PipelineRunner:
         self.venv_python = venv_python or Path(__import__('sys').executable)
         self.progress = None  # Unified pipeline progress tracker
         self.viewport_name = None  # Set when running pipeline
+        self._last_percent = 0  # Track last reported percent for monotonicity
 
     def update_progress(self, stage: str, stage_percent: int, message: str):
-        """Update unified pipeline progress.
+        """Update unified pipeline progress (monotonically increasing).
 
         Args:
             stage: Stage name ('download', 'rgb', 'pyramids', 'faiss', 'umap')
@@ -86,6 +87,9 @@ class PipelineRunner:
         start, end = STAGE_PROGRESS.get(stage, (0, 100))
         # Map stage_percent (0-100) to the stage's allocated range
         overall_percent = start + int((end - start) * stage_percent / 100)
+        # Enforce monotonicity — never report a lower percent than before
+        overall_percent = max(overall_percent, self._last_percent)
+        self._last_percent = overall_percent
         self.progress.update("processing", message, overall_percent, 100)
 
     def _stream_pipe(self, pipe, label, lines_out):

@@ -107,8 +107,8 @@ def download_embeddings():
         print(f"ERROR: Failed to read viewport: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Initialize progress tracker - use pipeline progress file for single source of truth
-    progress = ProgressTracker(f"{viewport_id}_pipeline")
+    # Initialize progress tracker - use script-specific progress file to avoid conflicts with pipeline orchestrator
+    progress = ProgressTracker(f"{viewport_id}_download")
     progress.update("starting", f"Initializing download for {viewport_id}...")
 
     # Create output directories

@@ -1130,12 +1130,17 @@ def api_delete_viewport():
         # Delete progress tracking files for this viewport
         tmp_dir = Path('/tmp')
         progress_patterns = [
-            f'{viewport_name}_embeddings_progress.json',
+            f'{viewport_name}_download_progress.json',
             f'{viewport_name}_pyramids_progress.json',
+            f'{viewport_name}_faiss_progress.json',
+            f'{viewport_name}_umap_progress.json',
+            f'{viewport_name}_pca_progress.json',
+            f'{viewport_name}_pipeline_progress.json',
+            # Legacy patterns
+            f'{viewport_name}_embeddings_progress.json',
             f'{viewport_name}_faiss_*_progress.json',
             f'{viewport_name}_umap_*_progress.json',
             f'{viewport_name}_pca_*_progress.json',
-            f'{viewport_name}_pipeline_progress.json',
         ]
         for pattern in progress_patterns:
             for progress_file in tmp_dir.glob(pattern):
