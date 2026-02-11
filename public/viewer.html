@@ -3359,12 +3359,8 @@
                     updateLabelsUI();
                     updateOverlay();
 
-                    // Clear the explorer preview (yellow overlay)
-                    if (explorerCanvasLayer && maps.rgb.hasLayer(explorerCanvasLayer)) {
-                        maps.rgb.removeLayer(explorerCanvasLayer);
-                    }
-                    explorerResults = null;
-                    explorerCanvasLayer = null;
+                    // Clear the explorer preview (yellow overlay) and all markers
+                    clearExplorerResults();
 
                     closeSaveLabelModal();
                     console.log(`✓ Saved label: ${name} (${result.pixel_count} pixels)`);
