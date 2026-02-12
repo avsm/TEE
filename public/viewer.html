@@ -624,9 +624,14 @@
             async open() {
                 if (this._db) return this._db;
                 return new Promise((resolve, reject) => {
-                    const req = indexedDB.open(this.DB_NAME, 1);
-                    req.onupgradeneeded = () => {
-                        req.result.createObjectStore(this.STORE_NAME);
+                    const req = indexedDB.open(this.DB_NAME, 2);
+                    req.onupgradeneeded = (e) => {
+                        const db = req.result;
+                        // Delete old store on upgrade to invalidate stale cache
+                        if (db.objectStoreNames.contains(this.STORE_NAME)) {
+                            db.deleteObjectStore(this.STORE_NAME);
+                        }
+                        db.createObjectStore(this.STORE_NAME);
                     };
                     req.onsuccess = () => {
                         this._db = req.result;
@@ -679,7 +684,16 @@
                 headerLen = view.getUint16(8, true);
                 dataOffset = 10 + headerLen;
             }
-            return buffer.slice(dataOffset);
+            // Parse header string for dtype, shape, fortran_order
+            const headerStr = new TextDecoder().decode(new Uint8Array(buffer, major >= 2 ? 12 : 10, headerLen));
+            const descrMatch = headerStr.match(/'descr':\s*'([^']+)'/);
+            const shapeMatch = headerStr.match(/'shape':\s*\(([^)]+)\)/);
+            const fortranMatch = headerStr.match(/'fortran_order':\s*(True|False)/);
+            const dtype = descrMatch ? descrMatch[1] : '<f4';
+            const shape = shapeMatch ? shapeMatch[1].split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
+            const fortranOrder = fortranMatch ? fortranMatch[1] === 'True' : false;
+            const rawData = buffer.slice(dataOffset);
+            return {rawData, dtype, shape, fortranOrder};
         }
 
         async function downloadFaissData(viewport, year) {
@@ -734,7 +748,8 @@
                 const coordsResp = await fetch(`/api/faiss-data/${viewport}/${year}/pixel_coords.npy`);
                 if (!coordsResp.ok) throw new Error(`pixel_coords.npy: ${coordsResp.status}`);
                 const coordsBuf = await coordsResp.arrayBuffer();
-                const coordsData = new Int32Array(parseNpy(coordsBuf));
+                const coordsParsed = parseNpy(coordsBuf);
+                const coordsData = new Int32Array(coordsParsed.rawData);
                 status.textContent = 'Downloading embeddings...';
                 bar.style.width = '10%';
                 percent.textContent = '10%';
@@ -767,13 +782,47 @@
                     embBuffer.set(chunk, offset);
                     offset += chunk.length;
                 }
-                const embeddingsData = new Float32Array(parseNpy(embBuffer.buffer));
+                const embParsed = parseNpy(embBuffer.buffer);
+                const embDim = 128;
+                let embeddingsData;
+
+                // Handle dtype: uint8 needs conversion to float32
+                if (embParsed.dtype === '|u1' || embParsed.dtype === '<u1') {
+                    const raw = new Uint8Array(embParsed.rawData);
+                    const N = embParsed.shape[0];
+                    embeddingsData = new Float32Array(N * embDim);
+                    if (embParsed.fortranOrder) {
+                        // Fortran (column-major): raw layout is all col0, then col1, ...
+                        for (let i = 0; i < N; i++) {
+                            for (let d = 0; d < embDim; d++) {
+                                embeddingsData[i * embDim + d] = raw[d * N + i];
+                            }
+                        }
+                    } else {
+                        for (let k = 0; k < raw.length; k++) embeddingsData[k] = raw[k];
+                    }
+                } else if (embParsed.dtype === '<f4') {
+                    const raw = new Float32Array(embParsed.rawData);
+                    const N = embParsed.shape[0];
+                    if (embParsed.fortranOrder) {
+                        embeddingsData = new Float32Array(N * embDim);
+                        for (let i = 0; i < N; i++) {
+                            for (let d = 0; d < embDim; d++) {
+                                embeddingsData[i * embDim + d] = raw[d * N + i];
+                            }
+                        }
+                    } else {
+                        embeddingsData = raw;
+                    }
+                } else {
+                    throw new Error(`Unsupported embedding dtype: ${embParsed.dtype}`);
+                }
 
                 status.textContent = 'Building lookup index...';
                 bar.style.width = '97%';
                 percent.textContent = '97%';
 
-                const numVectors = embeddingsData.length / 128;
+                const numVectors = embeddingsData.length / embDim;
                 const pixelLookup = new Map();
                 for (let i = 0; i < numVectors; i++) {
                     pixelLookup.set(`${coordsData[i * 2]},${coordsData[i * 2 + 1]}`, i);
