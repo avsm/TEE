@@ -2218,9 +2218,11 @@ def api_delete_viewport_label(viewport_name, label_id):
 @app.route('/api/config', methods=['GET'])
 def get_config():
     """Return client configuration including tile server URL."""
-    return jsonify({
-        'tile_server': app.config.get('TILE_SERVER_URL', 'http://localhost:5125')
-    })
+    config = {}
+    tile_server = app.config.get('TILE_SERVER_URL')
+    if tile_server:
+        config['tile_server'] = tile_server
+    return jsonify(config)
 
 
 # ============================================================================
@@ -2265,15 +2267,13 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=8001, help='Port to listen on (default: 8001)')
     parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
     parser.add_argument('--tile-server', default=None,
-                        help='Tile server URL (default: http://localhost:5125, env: TILE_SERVER_URL)')
+                        help='Tile server URL (default: same as page origin, env: TILE_SERVER_URL)')
     args = parser.parse_args()
 
-    # Set tile server URL from CLI flag, env var, or default
-    app.config['TILE_SERVER_URL'] = (
-        args.tile_server
-        or os.environ.get('TILE_SERVER_URL')
-        or 'http://localhost:5125'
-    )
+    # Set tile server URL from CLI flag or env var (omit to use client's page origin)
+    tile_server = args.tile_server or os.environ.get('TILE_SERVER_URL')
+    if tile_server:
+        app.config['TILE_SERVER_URL'] = tile_server
 
     debug = not args.prod
 

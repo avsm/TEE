@@ -30,7 +30,7 @@ echo ""
 
 # Start the web server
 echo "  → Web server on port 8001"
-./venv/bin/python3 backend/web_server.py > /tmp/web_server.log 2>&1 &
+./venv/bin/python3 backend/web_server.py --tile-server http://localhost:5125 > /tmp/web_server.log 2>&1 &
 WEB_SERVER_PID=$!
 
 # Start the tile server
