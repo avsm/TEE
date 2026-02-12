@@ -1136,7 +1136,7 @@
         // Load available years and populate dropdown
         async function loadAvailableYears() {
             try {
-                const response = await fetch(`http://localhost:8001/api/viewports/${currentViewportName}/available-years`);
+                const response = await fetch(`/api/viewports/${currentViewportName}/available-years`);
                 const data = await response.json();
 
                 if (data.success && data.years && data.years.length > 0) {
@@ -1267,7 +1267,7 @@
         // Load available years for Panel 6 (second year selector)
         async function loadAvailableYears2() {
             try {
-                const response = await fetch(`http://localhost:8001/api/viewports/${currentViewportName}/available-years`);
+                const response = await fetch(`/api/viewports/${currentViewportName}/available-years`);
                 const data = await response.json();
 
                 if (data.success && data.years && data.years.length > 0) {
@@ -3421,7 +3421,7 @@
                 })
                 .catch(err => {
                     console.warn('Tile server not responding:', err);
-                    alert('Warning: Tile server not responding. Make sure it is running on port 5125.');
+                    alert(`Warning: Tile server not responding (${TILE_SERVER}). Run restart.sh if local.`);
                 });
         };
 
