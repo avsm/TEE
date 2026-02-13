@@ -437,6 +437,9 @@
             <button id="status-btn" style="padding: 8px 12px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap;">
                 ℹ️ Status
             </button>
+            <button id="export-map-btn" style="padding: 8px 12px; background: #2d6a4f; color: white; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap;">
+                Export Map
+            </button>
         </div>
 
         <!-- Panel Layout Selector -->
@@ -1045,7 +1048,8 @@
                 attribution: 'Esri World Imagery',
                 opacity: 1.0,
                 maxZoom: 18,
-                minZoom: 6
+                minZoom: 6,
+                crossOrigin: 'anonymous'
             }).addTo(maps.rgb);
 
             // Clip RGB satellite map to viewport bounds
@@ -3541,11 +3545,147 @@
             updateUMAPColorsFromLabels();
         }
 
+        // Export map as high-resolution JPG with labels and legend
+        async function exportMapAsJPG() {
+            if (!maps.rgb) return;
+
+            const btn = document.getElementById('export-map-btn');
+            btn.textContent = 'Exporting...';
+            btn.disabled = true;
+
+            // Use setTimeout to let the UI update before the heavy work
+            await new Promise(r => setTimeout(r, 50));
+
+            try {
+                const map = maps.rgb;
+                const size = map.getSize();
+                const scale = 2; // 2x resolution for high-res export
+                const canvasW = size.x * scale;
+                const canvasH = size.y * scale;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = canvasW;
+                canvas.height = canvasH;
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.scale(scale, scale);
+
+                // Step 1: Draw satellite tiles
+                const tilePane = map.getPane('tilePane');
+                const tileContainers = tilePane.querySelectorAll('.leaflet-tile-container');
+                for (const container of tileContainers) {
+                    const tiles = container.querySelectorAll('img.leaflet-tile');
+                    for (const tile of tiles) {
+                        if (!tile.complete || tile.naturalWidth === 0) continue;
+                        // Get tile position from CSS transform or style
+                        const style = window.getComputedStyle(tile);
+                        const transform = style.transform;
+                        let tx = 0, ty = 0;
+                        if (transform && transform !== 'none') {
+                            const m = transform.match(/matrix\(([^)]+)\)/);
+                            if (m) {
+                                const vals = m[1].split(',').map(Number);
+                                tx = vals[4];
+                                ty = vals[5];
+                            }
+                        }
+                        // Convert from layer coordinates to container coordinates
+                        const origin = map.getPixelOrigin();
+                        const mapPanePos = map.getPane('mapPane')._leaflet_pos || {x: 0, y: 0};
+                        const x = tx + mapPanePos.x;
+                        const y = ty + mapPanePos.y;
+                        const w = tile.offsetWidth || 256;
+                        const h = tile.offsetHeight || 256;
+                        try {
+                            ctx.drawImage(tile, x, y, w, h);
+                        } catch (e) {
+                            // CORS or security error - skip this tile
+                        }
+                    }
+                }
+
+                // Step 2: Draw label pixels (same as PersistentLabelOverlay._redraw)
+                const OVERLAP = 1.0;
+                const visibleLabels = savedLabels.filter(l => l.visible && l.pixels && l.pixels.length > 0);
+                for (const label of visibleLabels) {
+                    const c = label.color;
+                    const r = parseInt(c.substr(1,2), 16);
+                    const g = parseInt(c.substr(3,2), 16);
+                    const b = parseInt(c.substr(5,2), 16);
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.7)`;
+
+                    for (const pixel of label.pixels) {
+                        const pb = calculatePixelBounds(pixel.lat, pixel.lon);
+                        const sw = map.latLngToContainerPoint(pb[0]);
+                        const ne = map.latLngToContainerPoint(pb[1]);
+                        if (ne.x < 0 || sw.x > size.x || sw.y < 0 || ne.y > size.y) continue;
+                        const px = sw.x - OVERLAP;
+                        const py = ne.y - OVERLAP;
+                        const pw = ne.x - sw.x + 2 * OVERLAP;
+                        const ph = sw.y - ne.y + 2 * OVERLAP;
+                        if (pw > 0.1 && ph > 0.1) ctx.fillRect(px, py, pw, ph);
+                    }
+                }
+
+                // Step 3: Draw legend
+                if (visibleLabels.length > 0) {
+                    const legendX = 10;
+                    const legendY = size.y - 10 - (visibleLabels.length * 24 + 16);
+                    const legendW = 180;
+                    const legendH = visibleLabels.length * 24 + 16;
+
+                    // Background
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.fillRect(legendX, legendY, legendW, legendH);
+                    ctx.strokeRect(legendX, legendY, legendW, legendH);
+
+                    // Legend entries
+                    ctx.font = '13px Arial, sans-serif';
+                    ctx.textBaseline = 'middle';
+                    for (let i = 0; i < visibleLabels.length; i++) {
+                        const label = visibleLabels[i];
+                        const ey = legendY + 12 + i * 24;
+
+                        // Color swatch
+                        ctx.fillStyle = label.color;
+                        ctx.fillRect(legendX + 10, ey - 6, 14, 14);
+                        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+                        ctx.lineWidth = 0.5;
+                        ctx.strokeRect(legendX + 10, ey - 6, 14, 14);
+
+                        // Label name
+                        ctx.fillStyle = '#333';
+                        ctx.fillText(label.name, legendX + 32, ey + 1);
+                    }
+                }
+
+                // Step 4: Download as JPG
+                canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${currentViewportName}_labels_z${map.getZoom()}.jpg`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }, 'image/jpeg', 0.95);
+
+            } catch (e) {
+                console.error('[EXPORT] Error exporting map:', e);
+                alert('Error exporting map. Check console for details.');
+            } finally {
+                btn.textContent = 'Export Map';
+                btn.disabled = false;
+            }
+        }
+
         // Attach event listeners to sidebar buttons and modal
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('save-label-btn').addEventListener('click', saveCurrentSearchAsLabel);
             document.getElementById('toggle-all-overlays').addEventListener('click', toggleAllOverlays);
             document.getElementById('export-labels-btn').addEventListener('click', exportSavedLabels);
+            document.getElementById('export-map-btn').addEventListener('click', exportMapAsJPG);
             document.getElementById('import-labels-btn').addEventListener('click', () => {
                 document.getElementById('import-labels-file').click();
             });
