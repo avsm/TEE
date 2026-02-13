@@ -89,10 +89,17 @@ The **Advanced Viewer** extends the standard viewer with a comprehensive 6-panel
 
 #### Label Data
 - Labels are stored in **browser localStorage** — fully private, no data sent to server
-- Only metadata is persisted (source pixel, threshold, color, name); pixel coverage is recomputed on load
-- Export/import as JSON for backup and sharing between browsers
+- Only metadata is persisted (source pixel, embedding, threshold, color, name); pixel coverage is recomputed on load
 - Survives page reloads — your labels are always preserved
 - Automatically refresh when switching years to track temporal changes
+
+#### Sharing Labels
+- Labels can be exported as a compact JSON file via the **Export Labels** button
+- The exported file contains each label's 128-dim embedding vector, threshold, and metadata — no pixel arrays
+- Share label files with collaborators via email or any file-sharing mechanism
+- Recipients import the file using the **Import** button; pixel coverage is recomputed locally from their own FAISS data
+- **Labels are portable across viewports**: a "bare ground" label created in one location will find bare-ground pixels in any other viewport, since the similarity search matches by embedding distance, not geographic coordinates
+- This enables collaborative workflows where one person defines land-cover categories and others apply them to different regions
 
 ## Quick Start
 
@@ -111,8 +118,8 @@ The easiest way to run TEE is with Docker:
 
 2. **Pull and run from Docker Hub (easiest):**
    ```bash
-   docker pull sk818/tee:1.1.0
-   docker run -p 8001:8001 -v ~/blore_data:/data sk818/tee:1.1.0
+   docker pull sk818/tee:1.1.1
+   docker run -p 8001:8001 -v ~/blore_data:/data sk818/tee:1.1.1
    ```
 
    **Or build from source:**

@@ -3437,10 +3437,13 @@
                 alert('No labels to export.');
                 return;
             }
-            const data = savedLabels.map(l => {
-                const {pixels, visible, ...meta} = l;
-                return meta;
-            });
+            const data = {
+                viewport: currentViewportName,
+                labels: savedLabels.map(l => {
+                    const {pixels, visible, ...meta} = l;
+                    return meta;
+                })
+            };
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -3455,9 +3458,11 @@
             const reader = new FileReader();
             reader.onload = async function(e) {
                 try {
-                    const imported = JSON.parse(e.target.result);
+                    const raw = JSON.parse(e.target.result);
+                    // Support both new format {viewport, labels: [...]} and old format [...]
+                    const imported = Array.isArray(raw) ? raw : (raw.labels || []);
                     if (!Array.isArray(imported)) {
-                        alert('Invalid label file: expected a JSON array.');
+                        alert('Invalid label file.');
                         return;
                     }
                     const existingIds = new Set(savedLabels.map(l => l.id));
