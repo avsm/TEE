@@ -3245,17 +3245,25 @@
             }
             for (const label of savedLabels) {
                 try {
-                    const embedding = localExtract(label.source_pixel.lat, label.source_pixel.lon);
-                    if (!embedding) {
-                        console.warn(`[LABEL] No embedding for ${label.name} at source pixel`);
-                        continue;
+                    // Use stored embedding if available (exact match to original search),
+                    // otherwise fall back to re-extracting from source pixel
+                    let embedding = label.embedding;
+                    if (embedding) {
+                        // Convert from Array to Float32Array for localSearchSimilar
+                        if (!(embedding instanceof Float32Array)) {
+                            embedding = new Float32Array(embedding);
+                        }
+                    } else {
+                        embedding = localExtract(label.source_pixel.lat, label.source_pixel.lon);
+                        if (!embedding) {
+                            console.warn(`[LABEL] No embedding for ${label.name} at source pixel`);
+                            continue;
+                        }
+                        label.embedding = Array.from(embedding);
                     }
                     const matches = localSearchSimilar(embedding, label.threshold);
                     label.pixels = matches;
                     label.pixel_count = matches.length;
-                    if (!label.embedding) {
-                        label.embedding = Array.from(embedding);
-                    }
                 } catch (error) {
                     console.error(`[LABEL] Error recomputing ${label.name}:`, error);
                 }
