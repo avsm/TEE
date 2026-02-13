@@ -428,7 +428,7 @@
                 👁 Toggle Overlays
             </button>
             <button id="export-labels-btn" style="padding: 8px 12px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap;">
-                Export
+                Export Labels
             </button>
             <button id="import-labels-btn" style="padding: 8px 12px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap;">
                 Import
@@ -3253,10 +3253,14 @@
                     const matches = localSearchSimilar(embedding, label.threshold);
                     label.pixels = matches;
                     label.pixel_count = matches.length;
+                    if (!label.embedding) {
+                        label.embedding = Array.from(embedding);
+                    }
                 } catch (error) {
                     console.error(`[LABEL] Error recomputing ${label.name}:`, error);
                 }
             }
+            persistLabels();
             updateOverlay();
         }
 
@@ -3361,6 +3365,7 @@
                 min_distance: minDist,
                 max_distance: maxDist,
                 source_pixel: currentSearchCache.sourcePixel,
+                embedding: currentSearchCache.embedding,
                 pixel_count: filteredMatches.length,
                 created: new Date().toISOString(),
                 visible: true,
