@@ -166,7 +166,7 @@ def trigger_data_download_and_processing(viewport_name, years=None):
     2. create_rgb_embeddings.py - Create RGB visualization
     3. create_pyramids.py - Create pyramid tiles (CRITICAL for viewer)
     4. create_faiss_index.py - Create FAISS similarity search index
-    5. (Optional) compute_umap.py - Compute 2D UMAP projection
+    5. compute_umap.py - Compute 2D UMAP projection
 
     Uses single source of truth: lib.pipeline.PipelineRunner
     """
@@ -194,12 +194,11 @@ def trigger_data_download_and_processing(viewport_name, years=None):
                     task = tasks.get(operation_id, {})
                     return task.get('status') == 'cancelled'
 
-            # Run the full pipeline (stages 1-4, optional UMAP)
-            # Note: UMAP is only computed if explicitly enabled; web UI doesn't compute it
+            # Run the full pipeline (stages 1-5, including UMAP)
             success, error = runner.run_full_pipeline(
                 viewport_name=viewport_name,
                 years_str=years_str,
-                compute_umap=False,  # Web UI doesn't compute UMAP; it's optional for CLI
+                compute_umap=True,
                 cancel_check=is_cancelled
             )
 
@@ -1293,7 +1292,7 @@ def api_compute_umap(viewport_name):
         if not umap_file.exists():
             return jsonify({
                 'success': False,
-                'error': f'UMAP not computed. Run: python3 compute_umap.py {viewport_name} {year}'
+                'error': f'UMAP not yet available for {viewport_name} ({year}). It will be computed automatically by the pipeline.'
             }), 404
 
         try:
