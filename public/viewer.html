@@ -451,6 +451,25 @@
         <!-- Lat/Lon Coordinates -->
         <div id="header-coords" style="margin-left: auto; font-family: monospace; font-size: 13px; color: #aaa; white-space: nowrap;"></div>
 
+        <!-- Help Button -->
+        <button id="help-btn" style="padding: 8px 12px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; margin-left: 10px;">? Help</button>
+
+        <!-- Help Popup -->
+        <div id="help-popup" style="position: absolute; top: 100%; right: 10px; width: 340px; background: rgba(255,255,255,0.98); backdrop-filter: blur(10px); border-radius: 8px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 999; font-size: 13px; display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="font-weight: 600; font-size: 14px; color: #333;">Quick Reference</div>
+                <button id="help-close-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 0; width: 20px; height: 20px; color: #666;">&#10005;</button>
+            </div>
+            <div style="line-height: 1.8; color: #444;">
+                <div><b>Left-click</b> anywhere to locate a point</div>
+                <div><b>Left-click drag</b> to pan the map</div>
+                <div><b>Scroll</b> to zoom in/out</div>
+                <div><b>Double-click</b> for similarity search</div>
+                <div><b>Right-click drag</b> to rotate (PCA/UMAP pane)</div>
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">Use <b>Export</b> / <b>Import</b> to save labels to your desktop or load them from a local file.</div>
+            </div>
+        </div>
+
         <!-- Status Popup -->
         <div id="status-popup" style="position: absolute; top: 100%; right: 10px; width: 320px; background: rgba(255,255,255,0.98); backdrop-filter: blur(10px); border-radius: 8px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 999; font-size: 12px; display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -3556,6 +3575,14 @@
             document.getElementById('labels-close-btn').addEventListener('click', function() {
                 document.getElementById('labels-details-panel').style.display = 'none';
             });
+
+            // Help button toggle
+            function toggleHelpPopup() {
+                const popup = document.getElementById('help-popup');
+                popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
+            }
+            document.getElementById('help-btn').addEventListener('click', toggleHelpPopup);
+            document.getElementById('help-close-btn').addEventListener('click', toggleHelpPopup);
 
             // Status button - show/hide popup and fetch status
             document.getElementById('status-btn').addEventListener('click', async function() {
