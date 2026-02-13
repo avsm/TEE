@@ -502,7 +502,13 @@
             <div id="map-osm" class="map"></div>
         </div>
         <div class="panel">
-            <div class="panel-header">Bing Maps</div>
+            <div class="panel-header" style="justify-content: space-between;">
+                <span id="panel2-title">Satellite</span>
+                <select id="satellite-source-selector" style="margin-left: 10px; padding: 4px 8px; border: 1px solid #555; border-radius: 3px; background: #333; color: #fff; font-size: 13px;">
+                    <option value="esri">Esri</option>
+                    <option value="google">Google</option>
+                </select>
+            </div>
             <div id="map-rgb" class="map"></div>
 
         </div>
@@ -636,6 +642,22 @@
 
         // Local FAISS data for client-side similarity search
         let faissLocal = null;  // {embeddings: Float32Array, coords: Int32Array, metadata: Object, pixelLookup: Map, numVectors: number, dim: number, viewport: string, year: string}
+
+        // Satellite tile sources for Panel 2
+        const satelliteSources = {
+            esri: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attribution: 'Esri World Imagery',
+                exportUrl: (z, y, x) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+            },
+            google: {
+                url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+                attribution: 'Google Satellite',
+                exportUrl: (z, y, x) => `https://mt1.google.com/vt/lyrs=s&x=${x}&y=${y}&z=${z}`
+            }
+        };
+        let currentSatelliteSource = 'esri';
+        let satelliteTileLayer = null;
 
         // ===== IndexedDB Cache for FAISS Data =====
         const FaissCache = {
@@ -1044,13 +1066,34 @@
             });
             L.control.zoom({position: 'bottomright'}).addTo(maps.rgb);
 
-            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Esri World Imagery',
+            // Initialize satellite tile layer
+            satelliteTileLayer = L.tileLayer(satelliteSources.esri.url, {
+                attribution: satelliteSources.esri.attribution,
                 opacity: 1.0,
                 maxZoom: 18,
                 minZoom: 6,
                 crossOrigin: 'anonymous'
-            }).addTo(maps.rgb);
+            });
+            satelliteTileLayer.addTo(maps.rgb);
+
+            // Satellite source selector
+            const satSelector = document.getElementById('satellite-source-selector');
+            if (satSelector) {
+                satSelector.addEventListener('change', function() {
+                    const src = satelliteSources[this.value];
+                    if (!src) return;
+                    currentSatelliteSource = this.value;
+                    maps.rgb.removeLayer(satelliteTileLayer);
+                    satelliteTileLayer = L.tileLayer(src.url, {
+                        attribution: src.attribution,
+                        opacity: 1.0,
+                        maxZoom: 18,
+                        minZoom: 6,
+                        crossOrigin: 'anonymous'
+                    });
+                    satelliteTileLayer.addTo(maps.rgb);
+                });
+            }
 
             // Clip RGB satellite map to viewport bounds
             if (viewportBounds) {
@@ -3597,7 +3640,7 @@
 
                 // Step 1: Fetch and draw all satellite tiles at max zoom
                 let loaded = 0;
-                const BATCH = 8; // concurrent fetches
+                const BATCH = 24; // concurrent fetches
                 const tileJobs = [];
                 for (let ty = tileMinY; ty <= tileMaxY; ty++) {
                     for (let tx = tileMinX; tx <= tileMaxX; tx++) {
@@ -3619,7 +3662,7 @@
                             resolve();
                         };
                         img.onerror = () => { loaded++; resolve(); };
-                        img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${MAX_ZOOM}/${ty}/${tx}`;
+                        img.src = satelliteSources[currentSatelliteSource].exportUrl(MAX_ZOOM, ty, tx);
                     })));
                 }
 
@@ -3660,7 +3703,7 @@
 
                 // Step 4: Draw legend (scaled for high-res output)
                 if (visibleLabels.length > 0) {
-                    const s = Math.max(1, Math.round(outCanvas.width / 600)); // scale factor for legend
+                    const s = Math.max(1, Math.round(outCanvas.width / 2400)); // scale factor for legend (25% of original)
                     const pad = 12 * s;
                     const rowH = 28 * s;
                     const swatchSz = 16 * s;
