@@ -91,6 +91,17 @@ def get_labels(viewport_name: str) -> list:
             label_dict['pixels'] = [dict(p) for p in pixels]
             label_dict['visible'] = bool(label_dict.get('visible', 1))
 
+            # Compute similarity stats from stored distances
+            distances = [p['distance'] for p in pixels if p['distance'] is not None]
+            if distances:
+                label_dict['mean_distance'] = sum(distances) / len(distances)
+                label_dict['min_distance'] = min(distances)
+                label_dict['max_distance'] = max(distances)
+            else:
+                label_dict['mean_distance'] = None
+                label_dict['min_distance'] = None
+                label_dict['max_distance'] = None
+
             # Reconstruct source_pixel dict
             if label_dict.get('source_lat') is not None:
                 label_dict['source_pixel'] = {
