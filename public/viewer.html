@@ -1591,6 +1591,55 @@
             // Panel 4 highlighting is handled by updateExplorerVisualization()
         }
 
+        // Pick a contrastive color not already in use. Never offers yellow or black.
+        function nextLabelColor() {
+            // Curated palette of distinct, saturated hues (no yellow, no black)
+            const palette = [
+                '#FF6B6B', // red
+                '#4ECDC4', // teal
+                '#45B7D1', // sky blue
+                '#96CEB4', // sage green
+                '#DDA15E', // amber/orange
+                '#BC6C25', // brown
+                '#9B59B6', // purple
+                '#E74C3C', // crimson
+                '#1ABC9C', // turquoise
+                '#3498DB', // blue
+                '#E67E22', // orange
+                '#2ECC71', // emerald
+                '#8E44AD', // dark purple
+                '#E84393', // pink
+                '#00CEC9', // cyan
+                '#6C5CE7', // indigo
+                '#FD79A8', // light pink
+                '#00B894', // mint
+                '#D63031', // dark red
+                '#0984E3', // bright blue
+            ];
+
+            // Collect all colors currently in use
+            const usedColors = new Set();
+            for (const c of Object.values(labelColors)) usedColors.add(c.toUpperCase());
+            for (const l of savedLabels) if (l.color) usedColors.add(l.color.toUpperCase());
+
+            // Return first unused palette color
+            for (const c of palette) {
+                if (!usedColors.has(c.toUpperCase())) return c;
+            }
+
+            // All palette colors used — generate a random saturated hue (avoid yellow 40-70 deg, black)
+            let hue;
+            do { hue = Math.floor(Math.random() * 360); } while (hue >= 40 && hue <= 70);
+            const sat = 65 + Math.floor(Math.random() * 20); // 65-85%
+            const lit = 45 + Math.floor(Math.random() * 15); // 45-60%
+            // Convert HSL to hex
+            const h = hue, s = sat / 100, l = lit / 100;
+            const a2 = s * Math.min(l, 1 - l);
+            const f = n => { const k = (n + h / 30) % 12; return l - a2 * Math.max(Math.min(k - 3, 9 - k, 1), -1); };
+            const toHex = x => Math.round(x * 255).toString(16).padStart(2, '0');
+            return '#' + toHex(f(0)) + toHex(f(8)) + toHex(f(4));
+        }
+
         // Create a new label
         function createLabelDialog() {
             const labelName = prompt('Enter new label name (e.g., "road", "building", "tree"):');
@@ -1601,21 +1650,7 @@
                     return;
                 }
 
-                // Default colors for common labels
-                const defaultColors = {
-                    'road': '#FF6B6B',
-                    'building': '#4ECDC4',
-                    'tree': '#45B7D1',
-                    'water': '#96CEB4',
-                    'grass': '#FFEAA7',
-                    'car': '#DDA15E',
-                    'person': '#BC6C25'
-                };
-
-                const defaultColor = defaultColors[label] || '#' + Math.floor(Math.random()*16777215).toString(16);
-
-                // Simple color picker using prompt with color preview
-                showColorPickerModal(label, defaultColor);
+                showColorPickerModal(label, nextLabelColor());
             }
         }
 
@@ -3215,10 +3250,11 @@
                 return;
             }
 
-            // Clear form and show modal
+            // Clear form and show modal with a contrastive color
+            const suggestedColor = nextLabelColor();
             document.getElementById('label-name-input').value = '';
-            document.getElementById('label-color-input').value = '#FF6B6B';
-            document.getElementById('color-hex-display').textContent = '#FF6B6B';
+            document.getElementById('label-color-input').value = suggestedColor;
+            document.getElementById('color-hex-display').textContent = suggestedColor.toUpperCase();
             document.getElementById('save-label-modal-overlay').style.display = 'flex';
             document.getElementById('label-name-input').focus();
         }
