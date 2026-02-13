@@ -3422,6 +3422,7 @@
         }
 
         // PersistentLabelOverlay class - renders all labels as colored pixels on RGB map
+        // Uses same geographic-pixel rendering as DirectCanvasLayer for crisp results.
         const PersistentLabelOverlay = L.Layer.extend({
             initialize: function(labelsArray, options) {
                 L.setOptions(this, options);
@@ -3431,60 +3432,74 @@
             onAdd: function(map) {
                 this._map = map;
 
-                // Create canvas
-                this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated');
+                this._canvas = document.createElement('canvas');
                 this._canvas.style.position = 'absolute';
+                this._canvas.style.top = '0';
+                this._canvas.style.left = '0';
+                this._canvas.style.pointerEvents = 'none';
                 this._canvas.style.zIndex = '500';
-                this._canvas.style.opacity = '0.6';
 
-                const pane = map.getPane('overlayPane');
-                pane.appendChild(this._canvas);
-
+                map.getContainer().appendChild(this._canvas);
                 this._ctx = this._canvas.getContext('2d');
+                this._ctx.imageSmoothingEnabled = false;
+                this._updateCanvasSize();
 
-                map.on('moveend zoom resize', this._redraw, this);
+                map.on('move zoom resize', this._redraw, this);
                 this._redraw();
             },
 
             onRemove: function(map) {
-                map.off('moveend zoom resize', this._redraw, this);
-                if (this._canvas && this._canvas.parentNode) {
-                    this._canvas.parentNode.removeChild(this._canvas);
-                }
+                map.off('move zoom resize', this._redraw, this);
+                if (this._canvas) this._canvas.remove();
+            },
+
+            _updateCanvasSize: function() {
+                const size = this._map.getSize();
+                this._canvas.width = size.x;
+                this._canvas.height = size.y;
+                this._canvas.style.width = size.x + 'px';
+                this._canvas.style.height = size.y + 'px';
+                this._ctx.imageSmoothingEnabled = false;
             },
 
             _redraw: function() {
-                if (!this._map) return;
+                if (!this._ctx || !this._canvas || !this._map) return;
 
-                const size = this._map.getSize();
-                const bounds = this._map.getBounds();
+                const ctx = this._ctx;
+                const map = this._map;
+                const size = map.getSize();
 
-                // Resize canvas
-                this._canvas.width = size.x;
-                this._canvas.height = size.y;
+                this._updateCanvasSize();
+                ctx.clearRect(0, 0, size.x, size.y);
 
-                // Position canvas
-                const topLeft = this._map.latLngToLayerPoint(bounds.getNorthWest());
-                L.DomUtil.setPosition(this._canvas, topLeft);
+                const OVERLAP = 1.0;
 
-                // Clear
-                this._ctx.clearRect(0, 0, size.x, size.y);
-
-                // Draw each visible label
                 this.labels.forEach(label => {
                     if (!label.visible || !label.pixels) return;
 
-                    this._ctx.fillStyle = label.color;
+                    // Parse color once, apply alpha
+                    const c = label.color;
+                    const r = parseInt(c.substr(1,2), 16);
+                    const g = parseInt(c.substr(3,2), 16);
+                    const b = parseInt(c.substr(5,2), 16);
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.7)`;
 
-                    label.pixels.forEach(pixel => {
-                        const point = this._map.latLngToContainerPoint([pixel.lat, pixel.lon]);
+                    for (const pixel of label.pixels) {
+                        const pb = calculatePixelBounds(pixel.lat, pixel.lon);
+                        const sw = map.latLngToContainerPoint(pb[0]);
+                        const ne = map.latLngToContainerPoint(pb[1]);
 
-                        // Skip off-screen pixels
-                        if (point.x < -10 || point.x > size.x + 10 || point.y < -10 || point.y > size.y + 10) return;
+                        if (ne.x < 0 || sw.x > size.x || sw.y < 0 || ne.y > size.y) continue;
 
-                        // Draw pixel (10x10 square)
-                        this._ctx.fillRect(Math.floor(point.x), Math.floor(point.y), 11, 11);
-                    });
+                        const x = sw.x - OVERLAP;
+                        const y = ne.y - OVERLAP;
+                        const w = ne.x - sw.x + 2 * OVERLAP;
+                        const h = sw.y - ne.y + 2 * OVERLAP;
+
+                        if (w > 0.1 && h > 0.1) {
+                            ctx.fillRect(x, y, w, h);
+                        }
+                    }
                 });
             },
 
